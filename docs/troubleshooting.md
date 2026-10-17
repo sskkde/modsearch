@@ -10,7 +10,7 @@ read_when:
 
 English | [简体中文](troubleshooting.zh-CN.md)
 
-Every message below is one modsearch actually prints. Search this file for the words you saw.
+Quoted errors below are messages modsearch actually prints. The engine sections also cover common key, quota, and endpoint failures. Search this file for the words you saw.
 
 ## First: run `modsearch doctor`
 
@@ -32,6 +32,9 @@ modsearch config set tavily.apiKey <key>
 modsearch config set exa.apiKey <key>
 modsearch config set firecrawl.apiKey <key>
 modsearch config set keenable.apiKey <key>
+modsearch config set doubao.apiKey <key>
+modsearch config set zhihu.apiKey <access-secret>
+modsearch config set baidu.apiKey <key>
 ```
 
 Page fetch (`-u`) still ends at the built-in local engine when cloud engines fail.
@@ -45,7 +48,7 @@ Individual quota reached. Please upgrade your subscription ... Resets in 94h19m9
 agy's free tier is one weekly grant shared by the Antigravity desktop app, the CLI, and the SDK, and parallel subagents drain it faster. Three ways out:
 
 - Wait for the reset named in the message.
-- Add a keyed search engine (Tavily, Exa, Firecrawl, or Keenable). Search then falls through to it automatically, with no further action from you.
+- Add a keyed search engine (Tavily, Exa, Firecrawl, Keenable, Doubao, Zhihu, or Baidu Qianfan). Search then falls through to it automatically, with no further action from you.
 - With cooldown on (the default), agy is remembered as spent and moved to the back of the chain until it resets, so later runs fail over first. See "An engine keeps getting skipped" below.
 
 ## agy not available in your location
@@ -107,6 +110,33 @@ tavily is out of monthly quota (HTTP 432). ...
 ```
 
 Tavily returns 432 (plan usage cap) and 433 (PAYGO cap) when the monthly budget is spent. modsearch reads these as the monthly quota class, so with cooldown on the engine is held for a full day rather than the 45-minute default, since retrying inside the hour just re-hits the same wall. Another search engine picks up the work meanwhile. Add credit at https://app.tavily.com or wait for the monthly reset.
+
+## Doubao Search (Volcengine)
+
+Doubao is search-only and always requires a key; it has no keyless tier.
+
+- **Missing key:** Run `modsearch doctor`, then set `modsearch config set doubao.apiKey <key>` or `DOUBAO_API_KEY`. A non-empty environment value overrides the config file.
+- **401/403:** Replace an invalid or revoked key and confirm the Volcengine account has access to Doubao Search. Check `DOUBAO_API_KEY` for an overriding value.
+- **Quota or rate limit:** Keep the account under 10 QPS. Each Volcengine account gets 500 free calls/month shared with the Custom edition; Global is pay-as-you-go only, with no subscription plans. Keep `DocCount` at 20 or below, check account usage/billing, or allow automatic failover to another engine.
+- **Wrong endpoint:** Restore the default by running `modsearch config set doubao.baseURL ""` and unsetting `DOUBAO_BASE_URL`. The default is `POST https://open.feedcoopapi.com/search_api/global_search` with Bearer auth.
+
+## Zhihu global search
+
+Zhihu is search-only and requires the platform's “access secret”; it has no keyless tier and searches public web content beyond zhihu.com.
+
+- **Missing key:** Set `modsearch config set zhihu.apiKey <access-secret>` or `ZHIHU_API_KEY`.
+- **401/403:** Check that the access secret is valid and authorized for global search, and check for an overriding `ZHIHU_API_KEY`. Requests need `X-Request-Timestamp` with the current Unix time in seconds as well as Bearer auth.
+- **Quota or rate limit:** Check account usage/reset information in the Zhihu Data Open Platform, or let automatic failover use another engine. `Count` must be 20 or lower; that is the maximum result count per request, not a published rate quota.
+- **Wrong endpoint:** Clear the override (`modsearch config set zhihu.baseURL ""`) and unset `ZHIHU_BASE_URL`. The default is `GET https://developer.zhihu.com/api/v1/content/global_search`; check the method, Bearer and timestamp headers, and `Query`, `Count`, `Filter`, and `SearchDB` query parameters.
+
+## Baidu Qianfan web search
+
+Baidu Qianfan is search-only and requires an API key; it has no keyless tier.
+
+- **Missing key:** Run `modsearch config set baidu.apiKey <key>` or set `BAIDU_API_KEY`.
+- **401/403:** Replace an invalid or revoked key, confirm Qianfan web search is enabled for the account, and check for an overriding `BAIDU_API_KEY`.
+- **Quota or rate limit:** The free tier grants 1,500 calls/month, credited daily, then switches to pay-as-you-go. Check account usage and billing; `web` `top_k` must be 50 or lower, and the `standard`, `turbo`, and `pro` editions have different prices. Let automatic failover use another engine if needed.
+- **Wrong endpoint:** Clear `baidu.baseURL` and unset `BAIDU_BASE_URL` to restore `POST https://qianfan.baidubce.com/v2/ai_search/web_search`. Check Bearer auth and that the request body includes `messages`, `search_source: "baidu_search_v2"`, `resource_type_filter` with `type: "web"` and `top_k`, and `edition: "standard"`.
 
 ## An engine keeps getting skipped
 

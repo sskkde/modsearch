@@ -8,7 +8,7 @@
 
 <p align="center">🥇 <b>全网最强的 DeepSeek Harness (dsh) 免费联网搜索插件</b> 🥇</p>
 
-<p align="center">引擎：<b>Firecrawl</b>（免注册，默认）· <b>Keenable</b>（免注册）· <b>Antigravity CLI</b> · <b>Tavily</b> · <b>Exa</b> · <b>Grok（X）</b> · <b>local</b>，自动故障转移</p>
+<p align="center">引擎：<b>Firecrawl</b>（免注册，默认）· <b>Keenable</b>（免注册）· <b>Antigravity CLI</b> · <b>Tavily</b> · <b>Exa</b> · <b>Doubao</b> · <b>Zhihu</b> · <b>Baidu Qianfan</b> · <b>Grok（X）</b> · <b>local</b>，自动故障转移</p>
 
 <p align="center">
   <a href="./README.md">English</a> ·
@@ -37,9 +37,9 @@ DeepSeek 和 GLM 等模型没有联网能力或联网能力羸弱。ModSearch �
 ## 特性
 
 - **🥇 全网最强的 DeepSeek Harness (dsh) 免费联网搜索插件：** 一条命令即刻安装 `npx -y @deepseek-ai/dsh plugin --profile web add @liustack/modsearch@5.10.7`。桌面版「添加插件」里填 `@liustack/modsearch`，不要填 GitHub 地址。细节见[接入指南](docs/harness-setup.zh-CN.md#deepseek-harness-dsh)。
-- **开箱免费，免注册。** 搜索和单页抓取默认跑在 Firecrawl 免注册通道上：[每月 1,000 免费 credits](https://www.firecrawl.dev/blog/firecrawl-keyless-launch)，没有账号、没有 API key、没有绑卡。后备通道也全部免费：Antigravity CLI 只需浏览器登录，Tavily、Exa 和免费的 Firecrawl key 各带独立的月度额度，均不要求绑卡。
+- **开箱免费，免注册。** 搜索和单页抓取默认跑在 Firecrawl 免注册通道上：[每月 1,000 免费 credits](https://www.firecrawl.dev/blog/firecrawl-keyless-launch)，没有账号、没有 API key、没有绑卡。Antigravity CLI 只需浏览器登录。Tavily、Exa、Firecrawl、Keenable、Doubao、Zhihu 和百度千帆均提供带 key 的选项，额度与计费规则各不相同。
 - **自动故障转移。** 一个通道失败或额度耗尽时自动切换下一个。
-- **单引擎多密钥轮换。** Tavily、Exa、Firecrawl、Keenable 都可配置逗号分隔的多个密钥。鉴权、限流或配额失败时先轮换到下一个密钥，再按引擎链故障转移。
+- **单引擎多密钥轮换。** Tavily、Exa、Firecrawl、Keenable、Doubao、Zhihu、百度千帆都可配置逗号分隔的多个密钥。鉴权、限流或配额失败时先轮换到下一个密钥，再按引擎链故障转移。
 - **可搜索 X（推特）。** 安装 Grok Build 后，可检索网页索引覆盖不到的 X 内容。
 - **一次安装，多端可用。** 支持 Claude Code、Codex、Pi、OpenCode。
 
@@ -74,10 +74,15 @@ Firecrawl 和 Keenable 零配置直接可用，其余引擎各一条命令。key
 | Antigravity CLI | 网页搜索 + 单页抓取 | 免费，浏览器登录 | 安装 `agy` 并登录 |
 | Tavily | 网页搜索 | 每月 1,000 credits，不绑卡 | `modsearch config set tavily.apiKey <key>` |
 | Exa | 网页搜索 | 每月 $10 循环额度（约 1,400 次），不绑卡 | `modsearch config set exa.apiKey <key>` |
+| Doubao（火山引擎豆包搜索 Global 版） | 网页搜索 | 必须配置 key；每个火山引擎账号每月赠送 500 次，与 Custom 版共享；每账号 10 QPS。Global 版仅按量付费，没有订阅套餐 | `modsearch config set doubao.apiKey <key>` |
+| Zhihu（`global_search`） | 全网网页搜索，不限于 zhihu.com | 必须配置 key（平台称为 access secret）；额度与计费由知乎数据开放平台确定 | `modsearch config set zhihu.apiKey <key>` |
+| Baidu Qianfan（`ai_search web_search`） | 网页搜索 | 必须配置 key；每月免费 1,500 次、每日发放，用完后按量付费；不同版本价格不同 | `modsearch config set baidu.apiKey <key>` |
 | Grok Build | X（推特）搜索 | 随 SuperGrok 或 X Premium 订阅 | 安装 `grok` 并登录 |
 | local | 单页抓取 | 内置，零安装 | 无需任何操作 |
 
-key 也可以走环境变量（`TAVILY_API_KEY`、`EXA_API_KEY`、`FIRECRAWL_API_KEY`、`KEENABLE_API_KEY`）。同一引擎可在配置文件或环境变量中写入逗号分隔的多个 key，例如 `key-one,key-two`。配了多个引擎就自动故障转移，好的优先。每个引擎默认都参与，可以用 `modsearch config set tavily.enabled false` 排除一个。想用 Tavily、Exa、Firecrawl、Keenable 兼容的第三方或自建端点？把引擎指过去即可：`modsearch config set tavily.baseURL <url>`。官方地址始终内置在代码里，不会作为默认配置写入文件。每个引擎的全部配置项见[配置指南](skills/modsearch/references/configure.zh-CN.md)。
+以上三个新引擎都只搜索且必须配置 key，没有免 key 档。默认端点分别是 Doubao：`POST https://open.feedcoopapi.com/search_api/global_search`（Bearer 鉴权）；Zhihu：`GET https://developer.zhihu.com/api/v1/content/global_search`（Bearer 鉴权和 `X-Request-Timestamp`）；百度千帆：`POST https://qianfan.baidubce.com/v2/ai_search/web_search`（Bearer 鉴权）。详细请求参数与限制见[配置指南](skills/modsearch/references/configure.zh-CN.md)。
+
+key 和端点覆盖也可走环境变量：`TAVILY_API_KEY`、`EXA_API_KEY`、`FIRECRAWL_API_KEY`、`KEENABLE_API_KEY`、`DOUBAO_API_KEY`、`ZHIHU_API_KEY`、`BAIDU_API_KEY`，以及 `TAVILY_BASE_URL`、`EXA_BASE_URL`、`FIRECRAWL_BASE_URL`、`KEENABLE_BASE_URL`、`DOUBAO_BASE_URL`、`ZHIHU_BASE_URL`、`BAIDU_BASE_URL`。同一引擎可在配置文件或环境变量中写入逗号分隔的多个 key，例如 `key-one,key-two`。配了多个引擎就自动故障转移，搜索顺序为 `firecrawl` → `keenable` → `antigravity-cli` → `tavily` → `exa` → `doubao` → `zhihu` → `baidu`。每个引擎默认都参与，可以用 `modsearch config set tavily.enabled false` 排除一个。想用兼容的第三方或自建端点？用 `baseURL` 指向它，例如 `modsearch config set doubao.baseURL <url>`。官方地址始终内置在代码里，不会作为默认配置写入文件。每个引擎的全部配置项见[配置指南](skills/modsearch/references/configure.zh-CN.md)。
 
 ## 安装
 
@@ -153,7 +158,7 @@ Clash、Clash Verge Rev、mihomo、Surge 的代理 fake-ip 模式开箱即用：
 
 ## 免责声明
 
-ModSearch 以 MIT 许可发布，使用不受限制。作者不对任何用途（含商业使用）提供保证与背书。上游引擎（Antigravity CLI、Tavily、Exa、Firecrawl、Keenable、Grok Build）各有自己的条款与额度，遵守这些约束由使用者负责。
+ModSearch 以 MIT 许可发布，使用不受限制。作者不对任何用途（含商业使用）提供保证与背书。上游引擎（Antigravity CLI、Tavily、Exa、Firecrawl、Keenable、Doubao、Zhihu、百度千帆、Grok Build）各有自己的条款与额度，遵守这些约束由使用者负责。
 
 ## License
 

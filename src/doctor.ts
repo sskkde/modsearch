@@ -229,6 +229,60 @@ function diagnoseEngine(
     };
   }
 
+  if (engine.name === 'doubao') {
+    const { count, source: keySource } = configuredApiKeys(
+      env.DOUBAO_API_KEY,
+      config.engines?.doubao?.apiKey,
+    );
+    const ready = count > 0;
+    return {
+      engine: engine.name,
+      enabled,
+      ready,
+      keySource,
+      reason: keySource
+        ? apiKeyPresentReason(count, keySource)
+        : 'no API key (not in DOUBAO_API_KEY or the config file)',
+      ...(ready ? {} : { fix: 'modsearch config set doubao.apiKey <key>' }),
+    };
+  }
+
+  if (engine.name === 'zhihu') {
+    const { count, source: keySource } = configuredApiKeys(
+      env.ZHIHU_API_KEY,
+      config.engines?.zhihu?.apiKey,
+    );
+    const ready = count > 0;
+    return {
+      engine: engine.name,
+      enabled,
+      ready,
+      keySource,
+      reason: keySource
+        ? apiKeyPresentReason(count, keySource)
+        : 'no API key (not in ZHIHU_API_KEY or the config file)',
+      ...(ready ? {} : { fix: 'modsearch config set zhihu.apiKey <key>' }),
+    };
+  }
+
+  if (engine.name === 'baidu') {
+    const { count, source: keySource } = configuredApiKeys(
+      env.BAIDU_API_KEY,
+      config.engines?.baidu?.apiKey,
+    );
+    const ready = count > 0;
+    return {
+      engine: engine.name,
+      enabled,
+      ready,
+      keySource,
+      reason: keySource
+        ? apiKeyPresentReason(count, keySource)
+        : 'no API key (not in BAIDU_API_KEY or the config file)',
+      ...(ready ? {} : { fix: 'modsearch config set baidu.apiKey <key>' }),
+    };
+  }
+
   if (engine.name === 'firecrawl') {
     const { count, source: keySource } = configuredApiKeys(
       env.FIRECRAWL_API_KEY,

@@ -69,7 +69,7 @@ Three jobs, each with its own engines:
 
 | Role | Engines (best first) | Notes |
 | :-- | :-- | :-- |
-| search the web | `firecrawl`, `keenable`, `antigravity-cli`, `tavily`, `exa` | Firecrawl works keyless with no signup (1,000 free credits/month), and so does Keenable (1,000 requests/hour, shared per IP). agy is free with a browser sign-in. Tavily, Exa, and a free Firecrawl or Keenable key add personal quotas. |
+| search the web | `firecrawl`, `keenable`, `antigravity-cli`, `tavily`, `exa`, `doubao`, `zhihu`, `baidu` | Firecrawl works keyless with no signup (1,000 free credits/month), and so does Keenable (1,000 requests/hour, shared per IP). agy is free with a browser sign-in. Tavily, Exa, and a free Firecrawl or Keenable key add personal quotas. Doubao, Zhihu, and Baidu Qianfan are search-only and require keys; Doubao has 500 free calls/month per Volcengine account (shared with Custom), 10 QPS, and a `DocCount` max of 20; Zhihu searches public web content with `Count` max 20; Baidu Qianfan grants 1,500 free calls/month, credited daily, before pay-as-you-go, with `web` `top_k` max 50 and differently priced `standard`, `turbo`, and `pro` editions. |
 | fetch a page | `firecrawl`, `antigravity-cli`, `local` | Firecrawl runs a cloud browser, keyless by default (`firecrawl.keylessFetch false` opts out). `local` needs nothing and is the default floor. |
 | search X | `grok-cli` | Needs Grok Build with SuperGrok or X Premium. |
 
@@ -123,7 +123,7 @@ Every error this CLI prints names its cause, and most already name the fix, so r
 
 - `Every engine for the web source failed`: read the attempt list. A bare install includes keyless Firecrawl and Keenable, so this means runtime failures such as no network, timeout, or exhausted limits rather than missing setup.
 - `Every engine for the <source> source failed`: each engine's failure is listed, and `attempts` in a returned entry carries the same per-engine errors. Act on the first fixable one.
-- Quota exhausted (agy weekly quota, or `exa`/`firecrawl`/`keenable` out of credits, or Keenable's hourly keyless pool used up): not fatal when another search engine is set up, since search falls through on its own and cooldown moves the spent engine to the back. Otherwise relay the reset time from the message.
+- Quota exhausted (agy weekly quota, or `exa`/`firecrawl`/`keenable` out of credits, Keenable's hourly keyless pool used up, Doubao's free calls or 10 QPS limit reached, or Baidu Qianfan's free calls used): not fatal when another search engine is set up, since search falls through on its own and cooldown moves the spent engine to the back. Otherwise relay the reset time or billing status from the message. Zhihu's `Count` is capped at 20 results per request.
 - Timeouts: retry once with `--timeout 300000`. If it still fails, report the exact error instead of answering from stale memory.
 
 ## References (read on demand)

@@ -27,6 +27,9 @@ window.__ModuleLoader__.load({
       'exa',
       'firecrawl',
       'keenable',
+      'doubao',
+      'zhihu',
+      'baidu',
       'grok-cli',
       'local',
     ];

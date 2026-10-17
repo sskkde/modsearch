@@ -10,7 +10,7 @@ read_when:
 
 [English](troubleshooting.md) | 简体中文
 
-下面每条信息都是 modsearch 真实会打印的。用你看到的字样在本页搜索。
+下面引号中的报错都是 modsearch 真实会打印的。各引擎章节还列出常见密钥、额度和端点故障。用你看到的字样在本页搜索。
 
 ## 第一步：先跑 `modsearch doctor`
 
@@ -32,6 +32,9 @@ modsearch config set tavily.apiKey <key>
 modsearch config set exa.apiKey <key>
 modsearch config set firecrawl.apiKey <key>
 modsearch config set keenable.apiKey <key>
+modsearch config set doubao.apiKey <key>
+modsearch config set zhihu.apiKey <access-secret>
+modsearch config set baidu.apiKey <key>
 ```
 
 云端引擎失败时，单页抓取（`-u`）仍会落到内置本地引擎。
@@ -45,7 +48,7 @@ Individual quota reached. Please upgrade your subscription ... Resets in 94h19m9
 agy 的免费额度是 Antigravity 桌面应用、CLI、SDK 共享的每周配额，并行子 agent 会加速消耗。三条出路：
 
 - 等报错里写的重置时间。
-- 加一个带 key 的搜索引擎（Tavily、Exa、Firecrawl 或 Keenable）。之后搜索自动落到它，你不用再做任何事。
+- 加一个带 key 的搜索引擎（Tavily、Exa、Firecrawl、Keenable、Doubao、Zhihu 或百度千帆）。之后搜索自动落到它，你不用再做任何事。
 - 冷却开着时（默认），agy 会被记为耗尽并挪到链末尾直到重置，后续运行先走别家。见下文「某个引擎总被跳过」。
 
 ## agy 在你所在地区不可用
@@ -107,6 +110,33 @@ tavily is out of monthly quota (HTTP 432). ...
 ```
 
 月度预算花完时 Tavily 返回 432（套餐用量上限）或 433（按量付费上限）。modsearch 把它们读作月度额度类错误，冷却开着时这个引擎会被按住一整天而不是默认的 45 分钟，因为一小时内重试只会撞同一堵墙。期间其他搜索引擎接手。到 https://app.tavily.com 加钱或等月度重置。
+
+## 豆包搜索（火山引擎）
+
+Doubao 只负责搜索，始终需要 key，没有免 key 档。
+
+- **缺少 key：** 运行 `modsearch doctor`，然后执行 `modsearch config set doubao.apiKey <key>` 或设置 `DOUBAO_API_KEY`。非空环境变量优先于配置文件。
+- **401/403：** 换成有效且未吊销的 key，并确认火山引擎账号有权调用豆包搜索。检查是否存在覆盖配置文件的 `DOUBAO_API_KEY`。
+- **额度或限流：** 每个账号控制在 10 QPS 以内。每个火山引擎账号每月获赠 500 次，与 Custom 版共享；Global 版仅按量付费，没有订阅套餐。`DocCount` 不得超过 20；检查账号用量和计费，或让自动故障转移改用其他引擎。
+- **端点错误：** 执行 `modsearch config set doubao.baseURL ""` 并取消设置 `DOUBAO_BASE_URL`，恢复默认端点 `POST https://open.feedcoopapi.com/search_api/global_search`，并确认使用 Bearer 鉴权。
+
+## 知乎全网搜索
+
+Zhihu 只负责搜索，必须配置知乎数据开放平台的「access secret」，没有免 key 档，搜索范围也不限于 zhihu.com。
+
+- **缺少 key：** 执行 `modsearch config set zhihu.apiKey <access-secret>` 或设置 `ZHIHU_API_KEY`。
+- **401/403：** 确认 access secret 有效且获准调用全网搜索，并检查是否有覆盖它的 `ZHIHU_API_KEY`。请求除 Bearer 鉴权外，还需要带当前 Unix 秒数格式的 `X-Request-Timestamp`。
+- **额度或限流：** 到知乎数据开放平台查看账号用量和重置时间，或让自动故障转移改用其他引擎。`Count` 不得超过 20；这是每次请求的最大结果数，不是已公布的速率配额。
+- **端点错误：** 清空覆盖值（`modsearch config set zhihu.baseURL ""`）并取消设置 `ZHIHU_BASE_URL`。默认端点是 `GET https://developer.zhihu.com/api/v1/content/global_search`；检查请求方法、Bearer 和时间戳请求头，以及 `Query`、`Count`、`Filter`、`SearchDB` 查询参数。
+
+## 百度千帆网页搜索
+
+百度千帆只负责搜索，必须配置 API key，没有免 key 档。
+
+- **缺少 key：** 执行 `modsearch config set baidu.apiKey <key>` 或设置 `BAIDU_API_KEY`。
+- **401/403：** 换成有效且未吊销的 key，确认账号已开通千帆网页搜索，并检查是否有覆盖配置文件的 `BAIDU_API_KEY`。
+- **额度或限流：** 免费额度每月 1,500 次、每日发放，用完后按量付费。检查账号用量与计费；`web` 的 `top_k` 不得超过 50，`standard`、`turbo`、`pro` 版本价格不同。需要时让自动故障转移使用其他引擎。
+- **端点错误：** 清空 `baidu.baseURL` 并取消设置 `BAIDU_BASE_URL`，恢复到 `POST https://qianfan.baidubce.com/v2/ai_search/web_search`。检查 Bearer 鉴权，并确认请求体包含 `messages`、`search_source: "baidu_search_v2"`、含 `type: "web"` 与 `top_k` 的 `resource_type_filter`，以及 `edition: "standard"`。
 
 ## 某个引擎总被跳过
 

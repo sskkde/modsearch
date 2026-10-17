@@ -10,11 +10,11 @@
 
 | 工作 | 引擎 | 可配置吗 |
 | :-- | :-- | :-- |
-| 搜公开网页 | `firecrawl`、`keenable`、`antigravity-cli`、`tavily`、`exa` | 首选引擎加每引擎参与开关 |
+| 搜公开网页 | `firecrawl`、`keenable`、`antigravity-cli`、`tavily`、`exa`、`doubao`、`zhihu`、`baidu` | 首选引擎加每引擎参与开关 |
 | 读一个 URL | 首选引擎（若它能抓取），然后是 `firecrawl`、`antigravity-cli`、`local` | 每引擎参与开关 |
 | 搜 X（推特） | `grok-cli` | 每引擎参与开关 |
 
-搜索顺序固定为 `firecrawl`、`keenable`、`antigravity-cli`、`tavily`、`exa`。抓取顺序是 `firecrawl`、`antigravity-cli`、`local`。每个引擎默认都参与。`engines.<name>.enabled: false` 会先排除一个引擎，可用性再过滤剩余名单，额度冷却最后重排就绪链（见下文）。Firecrawl 领跑两条链，因为它的免注册通道在裸机上就能用，不要账号不要 key。Keenable 排搜索第二也是同样的理由：Firecrawl 额度用完时，裸机上还有一个免注册的后备。
+搜索顺序固定为 `firecrawl`、`keenable`、`antigravity-cli`、`tavily`、`exa`、`doubao`、`zhihu`、`baidu`。抓取顺序是 `firecrawl`、`antigravity-cli`、`local`。每个引擎默认都参与。`engines.<name>.enabled: false` 会先排除一个引擎，可用性再过滤剩余名单，额度冷却最后重排就绪链（见下文）。Firecrawl 领跑两条链，因为它的免注册通道在裸机上就能用，不要账号不要 key。Keenable 排搜索第二也是同样的理由：Firecrawl 额度用完时，裸机上还有一个免注册的后备。Doubao、Zhihu 和百度千帆只负责搜索且始终需要 key，都没有免 key 档。
 
 从这张表能推出两个事实，它们回答大多数问题：
 
@@ -58,6 +58,9 @@ modsearch config show     # 生效配置：文件与环境变量合并，每个�
     "exa":             { "apiKey": "...", "enabled": false },
     "firecrawl":       { "apiKey": "fc-...", "keylessFetch": false },
     "keenable":        { "apiKey": "..." },
+    "doubao":          { "apiKey": "...", "baseURL": "https://gateway.example.com" },
+    "zhihu":           { "apiKey": "..." },
+    "baidu":           { "apiKey": "..." },
     "grok-cli":        { "bin": "grok" }
   }
 }
@@ -67,13 +70,13 @@ JSON 不支持注释，所以每个字段的说明在这里：
 
 | 字段 | 类型 | 作用范围 | 含义 |
 | :-- | :-- | :-- | :-- |
-| `engine` | string | 顶层 | 由哪个引擎搜索。空表示自动（用本机可用的最好那个）。取值 `antigravity-cli`、`tavily`、`exa`、`firecrawl`、`keenable` 之一。别名 `agy`、`antigravity`、`grok`、`http`、`direct` 也接受，会归一为正式名。 |
+| `engine` | string | 顶层 | 由哪个引擎搜索。空表示自动（用本机可用的最好那个）。取值 `antigravity-cli`、`tavily`、`exa`、`firecrawl`、`keenable`、`doubao`、`zhihu`、`baidu` 之一。别名 `agy`、`antigravity`、`grok`、`http`、`direct` 也接受，会归一为正式名。 |
 | `cooldown` | `"on"` / `"off"` | 顶层 | 额度冷却故障转移。默认开。关掉后不读不写任何状态，路由与从前完全一致。 |
 | `allowPrivateNetwork` | boolean | 顶层 | 允许本地抓取器访问私有或保留地址，包括 VPN 使用的其他保留地址段和 hosts 文件加速器。默认 `false`。DNS 返回的 `198.18.0.0/15` 地址已按 fake-ip 占位值放行，无需此开关。在 URL 中直写该地址段，开关关闭时仍会被拦截。此设置从不授权 Firecrawl 云端披露，URL 中直写的私有和保留目标始终不会发往云端。对于 DNS 结果，只有应用 fake-ip 例外后所有地址仍被判为私有或保留地址时，Firecrawl 才会拒绝披露。 |
 | `engines` | object | 顶层 | 按引擎正式名分组的每引擎设置。 |
 | `engines.<name>.enabled` | boolean | 所有引擎 | 是否允许自动路由使用该引擎。省略表示启用。设为 `false` 会排除它，设为 `true` 会删除覆盖并回到内置默认。单次显式 `--engine` 仍会强制使用该引擎。 |
-| `engines.<name>.apiKey` | string | `tavily`、`exa`、`firecrawl`、`keenable` | 一个 API key，或用英文逗号分隔的多个 key。解析时会忽略空白和空项。鉴权、限流或配额失败时按顺序轮换 key。网络、5xx 或解析失败时直接切换下一个引擎。也可用环境变量 `TAVILY_API_KEY` / `EXA_API_KEY` / `FIRECRAWL_API_KEY` / `KEENABLE_API_KEY`，环境变量优先于文件。 |
-| `engines.<name>.baseURL` | string | `tavily`、`exa`、`firecrawl`、`keenable` | 替换官方主机的接口地址：兼容的第三方网关、代理、自建部署。必须是完整的 http(s) URL。也可用环境变量 `TAVILY_BASE_URL` / `EXA_BASE_URL` / `FIRECRAWL_BASE_URL` / `KEENABLE_BASE_URL`。设为空即取消。详见下方端点一节。 |
+| `engines.<name>.apiKey` | string | `tavily`、`exa`、`firecrawl`、`keenable`、`doubao`、`zhihu`、`baidu` | 一个 API key，或用英文逗号分隔的多个 key。解析时会忽略空白和空项。鉴权、限流或配额失败时按顺序轮换 key。网络、5xx 或解析失败时直接切换下一个引擎。也可用环境变量 `TAVILY_API_KEY` / `EXA_API_KEY` / `FIRECRAWL_API_KEY` / `KEENABLE_API_KEY` / `DOUBAO_API_KEY` / `ZHIHU_API_KEY` / `BAIDU_API_KEY`，环境变量优先于文件。 |
+| `engines.<name>.baseURL` | string | `tavily`、`exa`、`firecrawl`、`keenable`、`doubao`、`zhihu`、`baidu` | 替换官方主机的接口地址：兼容的第三方网关、代理、自建部署。必须是完整的 http(s) URL。也可用环境变量 `TAVILY_BASE_URL` / `EXA_BASE_URL` / `FIRECRAWL_BASE_URL` / `KEENABLE_BASE_URL` / `DOUBAO_BASE_URL` / `ZHIHU_BASE_URL` / `BAIDU_BASE_URL`。设为空即取消。详见下方端点一节。 |
 | `engines.firecrawl.keylessFetch` | boolean | `firecrawl` | 允许 Firecrawl 在无 key 时抓取公网页面。默认 `true`（免注册抓取开箱即开）。设为 `false` 可让自动抓取远离 Firecrawl 云端。配置了 key 或显式选择 Firecrawl 引擎时仍会启用。 |
 | `engines.<name>.bin` | string | `antigravity-cli`、`grok-cli` | 该引擎 CLI 的路径。默认在 `PATH` 上找 `agy` 和 `grok`。 |
 | `engines.<name>.model` | string | `antigravity-cli` | 引擎使用的模型。默认 `gemini-3.6-flash-low`。 |
@@ -87,6 +90,12 @@ modsearch config set tavily.apiKey <key>      # 引擎凭据
 modsearch config set tavily.apiKey <key1,key2> # 按此顺序轮换 key
 modsearch config set tavily.apiKey            # 不带值：隐藏输入提示（见下）
 modsearch config set tavily.baseURL <url>     # 兼容的第三方端点
+modsearch config set doubao.apiKey <key>      # 豆包搜索
+modsearch config set zhihu.apiKey <key>       # 知乎全网搜索
+modsearch config set baidu.apiKey <key>       # 百度千帆网页搜索
+modsearch config set doubao.baseURL <url>     # 端点覆盖
+modsearch config set zhihu.baseURL <url>
+modsearch config set baidu.baseURL <url>
 modsearch config set tavily.enabled false     # 不让 Tavily 参与自动故障转移
 modsearch config set tavily.enabled true      # 删除禁用覆盖
 modsearch config set cooldown off             # 关闭额度冷却故障转移
@@ -161,16 +170,57 @@ modsearch config set keenable.apiKey <key>
 
 Keenable 只搜索，所以 `-u` 配 `-e keenable` 会报错。它和 Exa 一样返回排好序的链接和片段（Keenable 有发布日期时也带上），但不写综述，所以 summary 是机械拼的，会有一条 warning 说明这一点，证据在 `items` 里。
 
-### 第三方兼容端点（tavily、exa、firecrawl、keenable）
+### doubao（火山引擎 豆包搜索 Global 版；仅搜索，必须配置 key）
 
-四个 HTTP 引擎可以指向任何与官方 API 同协议的端点：转售网关、区域代理、自建部署。设置 `baseURL` 后，引擎在它上面拼各自的文档路径（tavily 和 exa 是 `/search`，firecrawl 是 `/v2/search` 和 `/v2/scrape`，keenable 带 key 时是 `/v1/search`，免注册时是 `/v1/search/public`），所以 base 为 `https://gw.example.com/tavily` 时会请求 `https://gw.example.com/tavily/search`。
+在火山引擎创建豆包搜索 API key。此引擎没有免 key 档。默认请求为 `POST https://open.feedcoopapi.com/search_api/global_search`，使用 `Authorization: Bearer <key>`。API 的 `DocCount` 最大值为 20。每个火山引擎账号每月获赠 500 次，与 Custom 版共享；每账号限 10 QPS。Global 版仅按量付费，没有订阅套餐。
 
-官方基地址内置在 provider 代码里，分别是 `https://api.tavily.com`、`https://api.exa.ai`、`https://api.firecrawl.dev`、`https://api.keenable.ai`。它们不会被复制进 `config.json`。`baseURL` 缺失或被清空都表示使用内置官方地址，这样后续版本修正默认值时不会被旧配置文件压住。dsh 设置卡片也遵守同一规则。
+```bash
+modsearch config set doubao.apiKey <key>
+# 或环境变量：export DOUBAO_API_KEY=<key>
+# 可选端点覆盖：export DOUBAO_BASE_URL=<url>
+```
+
+### zhihu（知乎数据开放平台 全网搜索 `global_search`；仅搜索，必须配置 key）
+
+在知乎数据开放平台注册 access secret（平台对 key 的称呼）。全网搜索覆盖所有公开网页内容，不限于 zhihu.com，且没有免 key 档。默认请求为 `GET https://developer.zhihu.com/api/v1/content/global_search`，请求头包含 `Authorization: Bearer <key>` 和 `X-Request-Timestamp: <unix seconds>`。查询参数为 `Query`、`Count`（最大 20）、`Filter`、`SearchDB`。结果包含作者、赞同数和权威等级。
+
+```bash
+modsearch config set zhihu.apiKey <access-secret>
+# 或环境变量：export ZHIHU_API_KEY=<access-secret>
+# 可选端点覆盖：export ZHIHU_BASE_URL=<url>
+```
+
+### baidu（百度智能云千帆 百度搜索 `ai_search web_search`；仅搜索，必须配置 key）
+
+创建百度智能云千帆 API key。此引擎没有免 key 档。默认请求为 `POST https://qianfan.baidubce.com/v2/ai_search/web_search`，使用 `Authorization: Bearer <key>`，请求体形如：
+
+```json
+{
+  "messages": [{ "role": "user", "content": "<query>" }],
+  "search_source": "baidu_search_v2",
+  "resource_type_filter": [{ "type": "web", "top_k": N }],
+  "edition": "standard"
+}
+```
+
+`web` 的 `top_k` 最大为 50。免费额度为每月 1,500 次、每日发放，之后按量付费。`standard`、`turbo`、`pro` 版本价格不同。
+
+```bash
+modsearch config set baidu.apiKey <key>
+# 或环境变量：export BAIDU_API_KEY=<key>
+# 可选端点覆盖：export BAIDU_BASE_URL=<url>
+```
+
+### 第三方兼容端点（tavily、exa、firecrawl、keenable、doubao、zhihu、baidu）
+
+HTTP 引擎可以指向任何与官方 API 同协议的端点：转售网关、区域代理、自建部署。对于 Tavily、Exa、Firecrawl 和 Keenable，设置 `baseURL` 后，引擎会拼接文档路径（Tavily 和 Exa 是 `/search`，Firecrawl 是 `/v2/search` 和 `/v2/scrape`，Keenable 带 key 时是 `/v1/search`，免注册时是 `/v1/search/public`），所以 base 为 `https://gw.example.com/tavily` 时会请求 `https://gw.example.com/tavily/search`。Doubao、Zhihu 和百度千帆的默认端点路径各不相同，见上方各自小节；`baseURL` / 对应环境变量会覆盖该端点。
+
+官方端点内置在 provider 代码里，分别是 `https://api.tavily.com`、`https://api.exa.ai`、`https://api.firecrawl.dev`、`https://api.keenable.ai`、`https://open.feedcoopapi.com/search_api/global_search`、`https://developer.zhihu.com/api/v1/content/global_search` 和 `https://qianfan.baidubce.com/v2/ai_search/web_search`。它们不会被复制进 `config.json`。`baseURL` 缺失或被清空都表示使用内置官方端点，这样后续版本修正默认值时不会被旧配置文件压住。dsh 设置卡片也遵守同一规则。
 
 ```bash
 modsearch config set tavily.baseURL https://gw.example.com/tavily
 modsearch config set tavily.baseURL ""        # 回到官方端点
-# 或按次生效：export TAVILY_BASE_URL=... / EXA_BASE_URL=... / FIRECRAWL_BASE_URL=... / KEENABLE_BASE_URL=...
+# 或按次生效：export TAVILY_BASE_URL=... / EXA_BASE_URL=... / FIRECRAWL_BASE_URL=... / KEENABLE_BASE_URL=... / DOUBAO_BASE_URL=... / ZHIHU_BASE_URL=... / BAIDU_BASE_URL=...
 ```
 
 API key 会发给 base 指定的主机。这正是功能的意义，也正是信任决定：只指向你愿意把这个 key 交出去的主机。
@@ -228,3 +278,15 @@ modsearch state clear               # 立即忘掉所有冷却
 - `Blocked private network target`：SSRF 防护。用户在 VPN 后面的话，用 `--allow-private-network` 重试。
 - 配置里引擎名写错：modsearch 在 `warnings` 里说明，并照常用一个能干活的引擎。用户想要回那个引擎时把名字改对。
 - 超时：先用 `--timeout 300000` 重试一次再上报失败。
+- Doubao 未就绪或提示缺少 key：豆包搜索只支持带 key 的请求。运行 `modsearch config set doubao.apiKey <key>`，或设置 `DOUBAO_API_KEY`；非空环境变量会覆盖配置文件中的值。
+- Doubao 返回 401/403：换成有效且未吊销的 API key，并确认账号有权使用豆包搜索。也要检查优先级更高的 `DOUBAO_API_KEY`。
+- Doubao 提示额度或限流耗尽：每个账号控制在 10 QPS 以内。每月 500 次免费额度由火山引擎账号与 Custom 版共享；Global 版仅按量付费，没有订阅套餐。`DocCount` 不得超过 20；重试前检查账号用量与计费状态。
+- Doubao 返回端点或路由错误：运行 `modsearch config set doubao.baseURL ""` 并取消设置 `DOUBAO_BASE_URL`，恢复到 `POST https://open.feedcoopapi.com/search_api/global_search`；确认使用 POST 和 Bearer 鉴权。
+- Zhihu 未就绪或提示缺少 key：用 `modsearch config set zhihu.apiKey <access-secret>` 或 `ZHIHU_API_KEY` 配置知乎数据开放平台的 access secret。
+- Zhihu 返回 401/403：确认 access secret 有效且已获准调用全网搜索，并检查是否有优先级更高的 `ZHIHU_API_KEY`。请求还需要包含当前 Unix 秒数格式的 `X-Request-Timestamp`。
+- Zhihu 提示额度或限流耗尽：到知乎数据开放平台检查账号用量与重置说明，或让自动故障转移使用其他搜索引擎。`Count` 不得超过 20；这是单次请求的结果数上限，不代表平台限流额度。
+- Zhihu 返回端点或路由错误：清空 `zhihu.baseURL` 并取消设置 `ZHIHU_BASE_URL`，恢复到 `GET https://developer.zhihu.com/api/v1/content/global_search`；检查请求方法、Bearer 请求头、时间戳请求头和 `Query` / `Count` / `Filter` / `SearchDB` 查询参数。
+- 百度千帆未就绪或提示缺少 key：运行 `modsearch config set baidu.apiKey <key>` 或设置 `BAIDU_API_KEY`。
+- 百度千帆返回 401/403：换成有效且未吊销的 API key，确认账号已开通千帆搜索，并检查是否有优先级更高的 `BAIDU_API_KEY`。
+- 百度千帆提示额度或限流耗尽：免费额度每月 1,500 次、每日发放，用完后按量付费。检查账号用量和计费；`web` 的 `top_k` 不得超过 50，`standard`、`turbo`、`pro` 版本价格不同。
+- 百度千帆返回端点或路由错误：清空 `baidu.baseURL` 并取消设置 `BAIDU_BASE_URL`，恢复到 `POST https://qianfan.baidubce.com/v2/ai_search/web_search`；检查 Bearer 鉴权和 `messages`、`search_source`、`resource_type_filter`、`edition` 请求体字段。

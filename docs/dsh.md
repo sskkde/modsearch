@@ -82,9 +82,14 @@ modsearch config set tavily.apiKey <key>
 modsearch config set exa.apiKey <key>
 modsearch config set firecrawl.apiKey <key>
 modsearch config set keenable.apiKey <key>
+modsearch config set doubao.apiKey <key>
+modsearch config set zhihu.apiKey <access-secret>
+modsearch config set baidu.apiKey <key>
 modsearch config set firecrawl.keylessFetch false
 modsearch config set cooldown off
 ```
+
+The search chain is `firecrawl` → `keenable` → `antigravity-cli` → `tavily` → `exa` → `doubao` → `zhihu` → `baidu`. Doubao, Zhihu, and Baidu Qianfan are search-only and require keys; none has a keyless tier. Their defaults are `POST https://open.feedcoopapi.com/search_api/global_search` (Doubao), `GET https://developer.zhihu.com/api/v1/content/global_search` (Zhihu), and `POST https://qianfan.baidubce.com/v2/ai_search/web_search` (Baidu Qianfan). Configure with `DOUBAO_API_KEY` / `DOUBAO_BASE_URL`, `ZHIHU_API_KEY` / `ZHIHU_BASE_URL`, and `BAIDU_API_KEY` / `BAIDU_BASE_URL`, or the matching `modsearch config set <engine>.apiKey` / `.baseURL` commands above. The configuration reference documents each endpoint's headers, request fields, quota, and limits.
 
 No setting is required to start: search and page fetch run on Firecrawl's keyless free quota (1,000 free credits/month, no signup), and search falls back to Keenable's keyless pool (1,000 requests/hour per IP, no signup). Keyless public-page fetch is on by default. It sends the requested URL to Firecrawl's cloud crawler, and the result warning names that route. `firecrawl.keylessFetch false` keeps automatic fetch local-only. Private and reserved targets are never sent to Firecrawl and fall through to the local fetcher.
 
@@ -96,13 +101,13 @@ The dsh web UI has no terminal, so the plugin brings its own settings card. On d
 
 The card holds three things:
 
-- The preferred engine: automatic, or one of `antigravity-cli`, `tavily`, `exa`, `firecrawl`, `keenable`, `grok-cli`. The `firecrawl` and `keenable` options are labelled as the keyless free tier. `local` fetches single pages and searches nothing, so it is not offered, unless the config file already names it as `engine`, in which case it stays listed rather than let the card disagree with the file.
-- The selected engine's own settings: API key and base URL for the HTTP engines (`tavily`, `exa`, `firecrawl`, `keenable`), and the model for `antigravity-cli`. Engines that sign in through their own command-line tool, and the built-in fetcher, show a line saying they need neither. Selecting `firecrawl` or `keenable` with no key stored adds a line saying it runs on the keyless free tier by default.
-- The automatic engine chain: one checkbox per search engine `modsearch doctor` found ready on this machine. Checked means automatic routing may use it. Engines this machine cannot run are left out, since they are not a decision to make, and so is `local`, which fetches pages rather than searching. `grok-cli` carries an "X search only" note, since it serves the social role alone. When doctor's answer never arrives, every search engine is listed with a line saying the status is unknown. A successful save re-reads doctor, so an engine the save just made ready gets its checkbox straight away.
+- The preferred engine: automatic, or one of `antigravity-cli`, `tavily`, `exa`, `firecrawl`, `keenable`, `doubao`, `zhihu`, `baidu`, `grok-cli`. The `firecrawl` and `keenable` options are labelled as the keyless free tier; the three new engines are keyed-only search engines. `local` fetches single pages and searches nothing, so it is not offered, unless the config file already names it as `engine`, in which case it stays listed rather than let the card disagree with the file.
+- The selected engine's own settings: API key and base URL for the HTTP engines (`tavily`, `exa`, `firecrawl`, `keenable`, `doubao`, `zhihu`, `baidu`), and the model for `antigravity-cli`. Engines that sign in through their own command-line tool, and the built-in fetcher, show a line saying they need neither. Selecting `firecrawl` or `keenable` with no key stored adds a line saying it runs on the keyless free tier by default.
+- The automatic engine chain: one checkbox per search engine `modsearch doctor` found ready on this machine. Its order is `firecrawl`, `keenable`, `antigravity-cli`, `tavily`, `exa`, `doubao`, `zhihu`, `baidu`; checked means automatic routing may use it. Engines this machine cannot run are left out, since they are not a decision to make, and so is `local`, which fetches pages rather than searching. `grok-cli` carries an "X search only" note, since it serves the social role alone. When doctor's answer never arrives, every search engine is listed with a line saying the status is unknown. A successful save re-reads doctor, so an engine the save just made ready gets its checkbox straight away.
 
 Every engine is checked by default. Unchecking one writes only `enabled: false`. Checking it again deletes that override instead of storing a redundant `true`. Unchecking the current preference returns the preference to automatic. The card only edits engines it lists: the `enabled` of an engine with no checkbox (one this machine cannot run, and `local`) is copied through untouched, and `modsearch config set <engine>.enabled` is the only way to change it. When no engine is ready here, the row of checkboxes is replaced by a line reading "No engine is ready on this machine yet."
 
-Official Tavily, Exa, Firecrawl, and Keenable endpoints live in the provider code. The base URL field is an override only. Leaving it blank or clearing it uses the built-in official address and writes no default URL into the config file.
+Official Tavily, Exa, Firecrawl, Keenable, Doubao, Zhihu, and Baidu Qianfan endpoints live in the provider code. For the new search engines the defaults are `POST https://open.feedcoopapi.com/search_api/global_search` (Doubao), `GET https://developer.zhihu.com/api/v1/content/global_search` (Zhihu), and `POST https://qianfan.baidubce.com/v2/ai_search/web_search` (Baidu Qianfan). The base URL field is an override only. Leaving it blank or clearing it uses the built-in official endpoint and writes no default URL into the config file.
 
 Everything else stays CLI only, including `bin`, `allowPrivateNetwork`, `cooldown` and `keylessFetch`. A card save copies them through untouched, and cannot create them.
 

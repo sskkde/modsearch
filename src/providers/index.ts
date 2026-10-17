@@ -1,11 +1,14 @@
 import type { EngineSettings, Role } from '../config.ts';
 import { antigravityCliProvider } from './antigravity.ts';
+import { baiduProvider } from './baidu.ts';
+import { doubaoProvider } from './doubao.ts';
 import { exaProvider } from './exa.ts';
 import { firecrawlProvider } from './firecrawl.ts';
 import { grokCliProvider } from './grok.ts';
 import { httpFetchProvider } from './httpFetch.ts';
 import { keenableProvider } from './keenable.ts';
 import { tavilyProvider } from './tavily.ts';
+import { zhihuProvider } from './zhihu.ts';
 
 export type RunMode = 'search' | 'fetch';
 
@@ -87,6 +90,13 @@ const ENGINES: Record<string, SearchEngine> = {
   exa: exaProvider,
   firecrawl: firecrawlProvider,
   keenable: keenableProvider,
+  // Chinese-market search APIs, all keyed and search-only: Volcengine's Doubao
+  // Search (Global edition), the Zhihu Data Open Platform global search, and
+  // Baidu Qianfan's AI Search. Each names its own vendor and covers a corpus
+  // the Western engines index poorly.
+  doubao: doubaoProvider,
+  zhihu: zhihuProvider,
+  baidu: baiduProvider,
   'grok-cli': grokCliProvider,
   grok: grokCliProvider,
   // The built-in direct fetcher, canonically `local`. `http` and `direct` stay
@@ -106,8 +116,10 @@ export const ROLE_PREFERENCE: Record<Role, string[]> = {
   // keyless engine, so a bare machine still has a fallback when Firecrawl's
   // daily allowance runs out. agy synthesizes and cites but its weekly quota
   // is small, so it backs the keyless pair up rather than fronting the chain.
-  // Tavily and Exa are keyed backups.
-  search: ['firecrawl', 'keenable', 'antigravity-cli', 'tavily', 'exa'],
+  // Tavily and Exa are keyed backups. Doubao, Zhihu and Baidu close the chain:
+  // all three need a key, so they never front a bare machine, but they give a
+  // Chinese-market answer when one of them is configured.
+  search: ['firecrawl', 'keenable', 'antigravity-cli', 'tavily', 'exa', 'doubao', 'zhihu', 'baidu'],
   // Firecrawl runs a cloud browser for JS-heavy pages, keyless by default
   // (opt out with firecrawl.keylessFetch false). agy extracts to a focus. The
   // local needs no setup and returns the page as served, so it stays the

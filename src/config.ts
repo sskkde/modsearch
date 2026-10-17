@@ -80,6 +80,9 @@ const ENV_BINDINGS: Record<string, Partial<Record<StringEngineSetting, string>>>
   exa: { apiKey: 'EXA_API_KEY', baseURL: 'EXA_BASE_URL' },
   firecrawl: { apiKey: 'FIRECRAWL_API_KEY', baseURL: 'FIRECRAWL_BASE_URL' },
   keenable: { apiKey: 'KEENABLE_API_KEY', baseURL: 'KEENABLE_BASE_URL' },
+  doubao: { apiKey: 'DOUBAO_API_KEY', baseURL: 'DOUBAO_BASE_URL' },
+  zhihu: { apiKey: 'ZHIHU_API_KEY', baseURL: 'ZHIHU_BASE_URL' },
+  baidu: { apiKey: 'BAIDU_API_KEY', baseURL: 'BAIDU_BASE_URL' },
 };
 
 const SETTABLE_ENGINE_FIELDS: Array<keyof EngineSettings> = [

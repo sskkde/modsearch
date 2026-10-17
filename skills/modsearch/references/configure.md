@@ -10,11 +10,11 @@ Three jobs, called roles. Each role has engines that can do it:
 
 | Job | Engines | Configurable? |
 | :-- | :-- | :-- |
-| search the public web | `firecrawl`, `keenable`, `antigravity-cli`, `tavily`, `exa` | preferred engine plus per-engine participation |
+| search the public web | `firecrawl`, `keenable`, `antigravity-cli`, `tavily`, `exa`, `doubao`, `zhihu`, `baidu` | preferred engine plus per-engine participation |
 | read one URL | the preferred engine if it can fetch, then `firecrawl`, `antigravity-cli`, `local` | per-engine participation |
 | search X (Twitter) | `grok-cli` | per-engine participation |
 
-The search order is fixed at `firecrawl` then `keenable` then `antigravity-cli` then `tavily` then `exa`, and fetch is `firecrawl` then `antigravity-cli` then `local`. Every engine participates by default. `engines.<name>.enabled: false` filters one out, availability filters what remains, and quota cooldown reorders the ready chain (see below). Firecrawl leads both chains because its keyless tier works on a bare machine, no signup, no key. Keenable comes second in search for the same reason, so a bare machine still has a keyless fallback when Firecrawl's allowance runs out.
+The search order is fixed at `firecrawl` then `keenable` then `antigravity-cli` then `tavily` then `exa` then `doubao` then `zhihu` then `baidu`, and fetch is `firecrawl` then `antigravity-cli` then `local`. Every engine participates by default. `engines.<name>.enabled: false` filters one out, availability filters what remains, and quota cooldown reorders the ready chain (see below). Firecrawl leads both chains because its keyless tier works on a bare machine, no signup, no key. Keenable comes second in search for the same reason, so a bare machine still has a keyless fallback when Firecrawl's allowance runs out. Doubao, Zhihu, and Baidu Qianfan are search-only and always require a key; none has a keyless tier.
 
 Two facts follow from this table, and they answer most questions:
 
@@ -58,6 +58,9 @@ Full structure. Every field is optional, and so is the file itself:
     "exa":             { "apiKey": "...", "enabled": false },
     "firecrawl":       { "apiKey": "fc-...", "keylessFetch": false },
     "keenable":        { "apiKey": "..." },
+    "doubao":          { "apiKey": "...", "baseURL": "https://gateway.example.com" },
+    "zhihu":           { "apiKey": "..." },
+    "baidu":           { "apiKey": "..." },
     "grok-cli":        { "bin": "grok" }
   }
 }
@@ -67,13 +70,13 @@ JSON has no comments, so here is every field:
 
 | Field | Type | Applies to | Meaning |
 | :-- | :-- | :-- | :-- |
-| `engine` | string | top level | Which engine searches. Empty means automatic (the best available here). One of `antigravity-cli`, `tavily`, `exa`, `firecrawl`, `keenable`. The aliases `agy`, `antigravity`, `grok`, `http`, `direct` are accepted and normalized to the canonical name. |
+| `engine` | string | top level | Which engine searches. Empty means automatic (the best available here). One of `antigravity-cli`, `tavily`, `exa`, `firecrawl`, `keenable`, `doubao`, `zhihu`, `baidu`. The aliases `agy`, `antigravity`, `grok`, `http`, `direct` are accepted and normalized to the canonical name. |
 | `cooldown` | `"on"` / `"off"` | top level | Quota cooldown failover. On by default. Off reads and writes no state and routes exactly as before. |
 | `allowPrivateNetwork` | boolean | top level | Allow the local fetcher to reach private or reserved addresses, including other VPN ranges and hosts-file accelerators. Default `false`. DNS answers in `198.18.0.0/15` already pass as fake-IP placeholders without this switch. Literal URLs in that range stay blocked while it is off. This setting never authorizes Firecrawl cloud disclosure. Literal private and reserved targets always stay off the cloud. For DNS answers, Firecrawl withholds the URL only when every address is private or reserved after the fake-IP exemption. |
 | `engines` | object | top level | Per-engine settings, keyed by canonical engine name. |
 | `engines.<name>.enabled` | boolean | every engine | Whether automatic routing may use this engine. Missing means enabled. Set `false` to exclude it. Setting `true` removes the override and returns to the built-in default. An explicit `--engine` still forces that engine for one run. |
-| `engines.<name>.apiKey` | string | `tavily`, `exa`, `firecrawl`, `keenable` | One API key, or multiple keys separated by commas. Whitespace and empty comma items are ignored. Authentication, rate-limit, and quota failures rotate through the keys in order. Network, 5xx, and parsing failures go directly to the next engine. Also settable via `TAVILY_API_KEY` / `EXA_API_KEY` / `FIRECRAWL_API_KEY` / `KEENABLE_API_KEY`, which win over the file. |
-| `engines.<name>.baseURL` | string | `tavily`, `exa`, `firecrawl`, `keenable` | Endpoint base replacing the official host: a compatible third-party gateway, a proxy, a self-hosted deployment. Must be a full http(s) URL. Also settable via `TAVILY_BASE_URL` / `EXA_BASE_URL` / `FIRECRAWL_BASE_URL` / `KEENABLE_BASE_URL`. Empty unsets it. See the endpoint section below. |
+| `engines.<name>.apiKey` | string | `tavily`, `exa`, `firecrawl`, `keenable`, `doubao`, `zhihu`, `baidu` | One API key, or multiple keys separated by commas. Whitespace and empty comma items are ignored. Authentication, rate-limit, and quota failures rotate through the keys in order. Network, 5xx, and parsing failures go directly to the next engine. Also settable via `TAVILY_API_KEY` / `EXA_API_KEY` / `FIRECRAWL_API_KEY` / `KEENABLE_API_KEY` / `DOUBAO_API_KEY` / `ZHIHU_API_KEY` / `BAIDU_API_KEY`, which win over the file. |
+| `engines.<name>.baseURL` | string | `tavily`, `exa`, `firecrawl`, `keenable`, `doubao`, `zhihu`, `baidu` | Endpoint base replacing the official host: a compatible third-party gateway, a proxy, a self-hosted deployment. Must be a full http(s) URL. Also settable via `TAVILY_BASE_URL` / `EXA_BASE_URL` / `FIRECRAWL_BASE_URL` / `KEENABLE_BASE_URL` / `DOUBAO_BASE_URL` / `ZHIHU_BASE_URL` / `BAIDU_BASE_URL`. Empty unsets it. See the endpoint section below. |
 | `engines.firecrawl.keylessFetch` | boolean | `firecrawl` | Allow public-page fetch through Firecrawl without a key. Default `true` (keyless fetch is on as installed). Set `false` to keep automatic page fetch off Firecrawl's cloud; a configured key or an explicit Firecrawl engine choice still enables it. |
 | `engines.<name>.bin` | string | `antigravity-cli`, `grok-cli` | Path to the engine's CLI binary. Defaults to `agy` and `grok` found on `PATH`. |
 | `engines.<name>.model` | string | `antigravity-cli` | Model the engine uses. Defaults to `gemini-3.6-flash-low`. |
@@ -87,6 +90,12 @@ modsearch config set tavily.apiKey <key>      # engine credentials
 modsearch config set tavily.apiKey <key1,key2> # rotate keys in this order
 modsearch config set tavily.apiKey            # no value: hidden prompt (see below)
 modsearch config set tavily.baseURL <url>     # a compatible third-party endpoint
+modsearch config set doubao.apiKey <key>      # Doubao Search
+modsearch config set zhihu.apiKey <key>       # Zhihu global search
+modsearch config set baidu.apiKey <key>       # Baidu Qianfan web search
+modsearch config set doubao.baseURL <url>     # endpoint override
+modsearch config set zhihu.baseURL <url>
+modsearch config set baidu.baseURL <url>
 modsearch config set tavily.enabled false     # keep Tavily out of automatic failover
 modsearch config set tavily.enabled true      # remove the opt-out
 modsearch config set cooldown off             # turn off quota cooldown failover
@@ -162,16 +171,57 @@ modsearch config set keenable.apiKey <key>
 
 Keenable searches only, so `-u` with `-e keenable` is an error. Like Exa, it returns ranked links with snippets (and a publish date when Keenable has one) but writes no synthesis, so its summary is mechanical, a warning says so, and the evidence is in `items`.
 
-### Third-party compatible endpoints (tavily, exa, firecrawl, keenable)
+### doubao — Volcengine Doubao Search Global edition (search only, key required)
 
-The four HTTP engines can point at any endpoint that speaks the same API as the official one: a reseller gateway, a regional proxy, a self-hosted deployment. Set `baseURL` and the engine appends its documented path to it (`/search` for tavily and exa, `/v2/search` and `/v2/scrape` for firecrawl, `/v1/search` for keyed keenable and `/v1/search/public` for keyless keenable), so a base of `https://gw.example.com/tavily` posts to `https://gw.example.com/tavily/search`.
+Create a Doubao Search API key in Volcengine, then configure it. This engine has no keyless tier. Its default request is `POST https://open.feedcoopapi.com/search_api/global_search` with `Authorization: Bearer <key>`. The API's `DocCount` maximum is 20. Each Volcengine account gets 500 free calls/month shared with the Custom edition; the Global edition is pay-as-you-go only, with no subscription plans, and is limited to 10 QPS per account.
 
-The official bases are built into the providers: `https://api.tavily.com`, `https://api.exa.ai`, `https://api.firecrawl.dev`, and `https://api.keenable.ai`. They are not copied into `config.json`. An absent or cleared `baseURL` means to use the built-in official base, which lets a later release correct that default without a stale file overriding it. The dsh settings card follows the same rule.
+```bash
+modsearch config set doubao.apiKey <key>
+# or environment: export DOUBAO_API_KEY=<key>
+# optional endpoint override: export DOUBAO_BASE_URL=<url>
+```
+
+### zhihu — Zhihu Data Open Platform global_search (search only, key required)
+
+Create an access secret in the Zhihu Data Open Platform. The global search covers all public web content, not only zhihu.com, and has no keyless tier. The default request is `GET https://developer.zhihu.com/api/v1/content/global_search`, with `Authorization: Bearer <key>` and `X-Request-Timestamp: <unix seconds>`. Query parameters are `Query`, `Count` (maximum 20), `Filter`, and `SearchDB`. Results include author, vote-up count, and an authority level.
+
+```bash
+modsearch config set zhihu.apiKey <access-secret>
+# or environment: export ZHIHU_API_KEY=<access-secret>
+# optional endpoint override: export ZHIHU_BASE_URL=<url>
+```
+
+### baidu — Baidu Qianfan ai_search web_search (search only, key required)
+
+Create a Baidu Qianfan API key. This engine has no keyless tier. The default request is `POST https://qianfan.baidubce.com/v2/ai_search/web_search` with `Authorization: Bearer <key>` and a body in this shape:
+
+```json
+{
+  "messages": [{ "role": "user", "content": "<query>" }],
+  "search_source": "baidu_search_v2",
+  "resource_type_filter": [{ "type": "web", "top_k": N }],
+  "edition": "standard"
+}
+```
+
+`web` `top_k` is capped at 50. The free tier grants 1,500 calls/month, credited daily, then switches to pay-as-you-go. The `standard`, `turbo`, and `pro` editions have different prices.
+
+```bash
+modsearch config set baidu.apiKey <key>
+# or environment: export BAIDU_API_KEY=<key>
+# optional endpoint override: export BAIDU_BASE_URL=<url>
+```
+
+### Third-party compatible endpoints (tavily, exa, firecrawl, keenable, doubao, zhihu, baidu)
+
+The HTTP engines can point at an endpoint that speaks the same API as the official one: a reseller gateway, a regional proxy, a self-hosted deployment. For Tavily, Exa, Firecrawl, and Keenable, set `baseURL` and the engine appends its documented path (`/search` for Tavily and Exa, `/v2/search` and `/v2/scrape` for Firecrawl, `/v1/search` for keyed Keenable and `/v1/search/public` for keyless Keenable), so a base of `https://gw.example.com/tavily` posts to `https://gw.example.com/tavily/search`. Doubao, Zhihu, and Baidu Qianfan have the provider-specific default endpoint paths listed above; `baseURL` / its environment variable overrides that endpoint.
+
+The official endpoints are built into the providers: `https://api.tavily.com`, `https://api.exa.ai`, `https://api.firecrawl.dev`, `https://api.keenable.ai`, `https://open.feedcoopapi.com/search_api/global_search`, `https://developer.zhihu.com/api/v1/content/global_search`, and `https://qianfan.baidubce.com/v2/ai_search/web_search`. They are not copied into `config.json`. An absent or cleared `baseURL` means to use the built-in official endpoint, which lets a later release correct that default without a stale file overriding it. The dsh settings card follows the same rule.
 
 ```bash
 modsearch config set tavily.baseURL https://gw.example.com/tavily
 modsearch config set tavily.baseURL ""        # back to the official endpoint
-# or per run: export TAVILY_BASE_URL=... / EXA_BASE_URL=... / FIRECRAWL_BASE_URL=... / KEENABLE_BASE_URL=...
+# or per run: export TAVILY_BASE_URL=... / EXA_BASE_URL=... / FIRECRAWL_BASE_URL=... / KEENABLE_BASE_URL=... / DOUBAO_BASE_URL=... / ZHIHU_BASE_URL=... / BAIDU_BASE_URL=...
 ```
 
 The API key is sent to whatever host the base names. That is the point, and it is also the trust decision: only name a host you would hand that key to.
@@ -229,3 +279,15 @@ modsearch state clear               # forget every cooldown now
 - `Blocked private network target`: SSRF guard. If the user is behind a VPN, retry with `--allow-private-network`.
 - Wrong engine name in config: modsearch says so in `warnings` and uses a working engine anyway. Fix the name when the user wants that engine back.
 - Timeouts: retry once with `--timeout 300000` before reporting failure.
+- Doubao is not ready / reports a missing key: Doubao is keyed only. Set `modsearch config set doubao.apiKey <key>` or `DOUBAO_API_KEY`; a non-empty environment value overrides the config file.
+- Doubao returns 401/403: replace the invalid or revoked API key and confirm the account is allowed to use Doubao Search. Check `DOUBAO_API_KEY` too, since it takes precedence over the saved key.
+- Doubao reports quota or rate-limit exhaustion: keep requests at or below 10 QPS per account. The 500 free calls/month are shared across Volcengine's account and Custom edition; Global is pay-as-you-go only, not subscription-based. Keep `DocCount` at 20 or below, and check account usage/billing before retrying.
+- Doubao returns an endpoint or route error: clear the override with `modsearch config set doubao.baseURL ""` and unset `DOUBAO_BASE_URL` to restore `POST https://open.feedcoopapi.com/search_api/global_search`; verify it is a POST and uses Bearer auth.
+- Zhihu is not ready / reports a missing key: configure the platform's access secret with `modsearch config set zhihu.apiKey <access-secret>` or `ZHIHU_API_KEY`.
+- Zhihu returns 401/403: confirm the access secret is valid and authorized for global search, and check `ZHIHU_API_KEY` for an overriding value. The request also needs a current `X-Request-Timestamp` containing Unix seconds.
+- Zhihu reports quota or rate-limit exhaustion: check the Zhihu Data Open Platform for the account's usage and reset information, or let automatic failover use another search engine. Keep `Count` at 20 or below; this is a per-request result cap, not a stated rate quota.
+- Zhihu returns an endpoint or route error: clear `zhihu.baseURL` and unset `ZHIHU_BASE_URL` to restore `GET https://developer.zhihu.com/api/v1/content/global_search`; verify the method, Bearer header, timestamp header, and `Query` / `Count` / `Filter` / `SearchDB` query parameters.
+- Baidu Qianfan is not ready / reports a missing key: set `modsearch config set baidu.apiKey <key>` or `BAIDU_API_KEY`.
+- Baidu Qianfan returns 401/403: replace the invalid or revoked API key, confirm Qianfan search access is enabled for the account, and check `BAIDU_API_KEY` for an environment override.
+- Baidu Qianfan reports quota or rate-limit exhaustion: its free tier grants 1,500 calls/month daily, then uses pay-as-you-go. Check account usage and billing; `web` `top_k` must be 50 or lower, and the `standard`, `turbo`, and `pro` editions have different prices.
+- Baidu Qianfan returns an endpoint or route error: clear `baidu.baseURL` and unset `BAIDU_BASE_URL` to restore `POST https://qianfan.baidubce.com/v2/ai_search/web_search`; verify Bearer auth and the documented `messages`, `search_source`, `resource_type_filter`, and `edition` body fields.

@@ -460,11 +460,14 @@ const CARD_ENGINES = [
   'exa',
   'firecrawl',
   'keenable',
+  'doubao',
+  'zhihu',
+  'baidu',
   'grok-cli',
   'local',
 ];
 /** The HTTP engines: the only ones with a key and an endpoint to configure. */
-const KEYED_ENGINES = ['tavily', 'exa', 'firecrawl', 'keenable'];
+const KEYED_ENGINES = ['tavily', 'exa', 'firecrawl', 'keenable', 'doubao', 'zhihu', 'baidu'];
 /**
  * Engines whose `model` setting a run actually reads. The others are shown
  * without the field rather than with one nothing is behind: the HTTP engines
@@ -494,6 +497,9 @@ const ENGINE_ENV_BINDINGS = {
   exa: { apiKey: 'EXA_API_KEY', baseURL: 'EXA_BASE_URL' },
   firecrawl: { apiKey: 'FIRECRAWL_API_KEY', baseURL: 'FIRECRAWL_BASE_URL' },
   keenable: { apiKey: 'KEENABLE_API_KEY', baseURL: 'KEENABLE_BASE_URL' },
+  doubao: { apiKey: 'DOUBAO_API_KEY', baseURL: 'DOUBAO_BASE_URL' },
+  zhihu: { apiKey: 'ZHIHU_API_KEY', baseURL: 'ZHIHU_BASE_URL' },
+  baidu: { apiKey: 'BAIDU_API_KEY', baseURL: 'BAIDU_BASE_URL' },
 };
 
 /** The canonical engine a stored name means, or '' when it names none. */
