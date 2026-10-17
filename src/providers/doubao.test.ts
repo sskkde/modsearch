@@ -71,12 +71,12 @@ describe('doubao provider', () => {
     ).rejects.toThrow(/DOUBAO_API_KEY/);
   });
 
-  it('posts the Global web search body with the key and a capped result count', async () => {
-    const calls = mockFetchJson({ Result: { Documents: [] } });
-    await executeDoubaoSearch(searchRequest({ apiKey: 'doubao-test-key' }, { maxResults: 27 }));
+  it('posts the Custom web search body with the key and a capped result count', async () => {
+    const calls = mockFetchJson({ Result: { WebResults: [] } });
+    await executeDoubaoSearch(searchRequest({ apiKey: 'doubao-test-key' }, { maxResults: 80 }));
 
     expect(calls).toHaveLength(1);
-    expect(calls[0].url).toBe('https://open.feedcoopapi.com/search_api/global_search');
+    expect(calls[0].url).toBe('https://open.feedcoopapi.com/search_api/web_search');
     expect(calls[0].init.method).toBe('POST');
     const headers = calls[0].init.headers as Record<string, string>;
     expect(headers.Authorization).toBe('Bearer doubao-test-key');
@@ -84,18 +84,19 @@ describe('doubao provider', () => {
     expect(JSON.parse(calls[0].init.body as string)).toEqual({
       Query: 'doubao provider test',
       SearchType: 'web',
-      DocCount: 20,
-      MaxSnippetLength: 500,
+      // The Custom edition's Count ceiling is 50, not the Global edition's 20.
+      Count: 50,
+      Filter: { NeedUrl: true },
     });
     expect(calls[0].init.signal).toBeInstanceOf(AbortSignal);
   });
 
   it('honours a baseURL override and folds its trailing slash', async () => {
-    const calls = mockFetchJson({ Result: { Documents: [] } });
+    const calls = mockFetchJson({ Result: { WebResults: [] } });
     await executeDoubaoSearch(
       searchRequest({ apiKey: 'doubao-test-key', baseURL: 'https://gateway.example.com/doubao/' }),
     );
-    expect(calls[0].url).toBe('https://gateway.example.com/doubao/search_api/global_search');
+    expect(calls[0].url).toBe('https://gateway.example.com/doubao/search_api/web_search');
   });
 
   it('rejects an invalid baseURL scheme', async () => {
@@ -107,25 +108,24 @@ describe('doubao provider', () => {
     ).rejects.toThrow(/Invalid engine baseURL/);
   });
 
-  it('maps text snippets and document metadata into the canonical result', async () => {
+  it('maps web results into the canonical shape, preferring the model-facing Summary', async () => {
     mockFetchJson({
       Result: {
-        TotalDocCount: 1,
-        Documents: [
+        ResultCount: 1,
+        WebResults: [
           {
-            Rank: 0,
-            Url: 'https://news.example.com/story',
+            Id: '5f4408b2b5dd9d81-9b8fc02da10ab180',
+            SortId: 1,
             Title: 'Example story',
-            Snippet: [
-              { Type: 'text', Text: 'First text passage.' },
-              {
-                Type: 'image',
-                Image: { Width: 1, Height: 1, ImageUrl: 'https://example.com/image.png', Alt: 'ignored' },
-              },
-              { Type: 'text', Text: 'Second text passage.' },
-            ],
-            DocumentInfo: { ContentCharCount: 100, ContentTokenCount: 25, Filetype: 'webpage', PublishTime: '2025-02-03' },
-            HostInfo: { Hostname: 'Example News', IconUrl: 'https://example.com/icon.png', AuthorityLevel: 'very_high' },
+            SiteName: 'Example News',
+            Url: 'https://news.example.com/story',
+            Snippet: 'Short list-view teaser.',
+            Summary: 'Longer passage cut around the query.',
+            Content: 'Full page text.',
+            PublishTime: '2025-05-30T19:35:24+08:00',
+            RankScore: 0.98,
+            AuthInfoDes: '正常权威',
+            AuthInfoLevel: 2,
           },
         ],
       },
@@ -138,14 +138,14 @@ describe('doubao provider', () => {
       uncertainty: string[];
     };
     expect(result).toEqual({
-      summary: 'First text passage.\nSecond text passage.',
+      summary: 'Longer passage cut around the query.',
       items: [
         {
           title: 'Example story',
           url: 'https://news.example.com/story',
-          snippet: 'First text passage.\nSecond text passage.',
+          snippet: 'Longer passage cut around the query.',
           source: 'Example News',
-          published_at: '2025-02-03',
+          published_at: '2025-05-30T19:35:24+08:00',
         },
       ],
       uncertainty: [],
@@ -153,8 +153,20 @@ describe('doubao provider', () => {
     expect(output.meta.usage).toEqual({ resultCount: 1 });
   });
 
-  it('returns uncertainty when Documents is empty or missing', async () => {
-    for (const body of [{ Result: { Documents: [] } }, { Result: {} }]) {
+  it('falls back to Snippet when the vendor sends no Summary', async () => {
+    mockFetchJson({
+      Result: {
+        WebResults: [{ Title: 'T', Url: 'https://e.example/1', Snippet: 'Teaser only.', SiteName: 'Site' }],
+      },
+    });
+    const output = await executeDoubaoSearch(searchRequest());
+    const items = (output.result as { items: Array<Record<string, unknown>> }).items;
+    expect(items[0].snippet).toBe('Teaser only.');
+    expect(items[0].published_at).toBeUndefined();
+  });
+
+  it('returns uncertainty when WebResults is empty or missing', async () => {
+    for (const body of [{ Result: { WebResults: [] } }, { Result: {} }]) {
       mockFetchJson(body);
       const output = await executeDoubaoSearch(searchRequest());
       expect((output.result as { uncertainty: string[] }).uncertainty).toEqual([

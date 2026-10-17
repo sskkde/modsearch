@@ -1,5 +1,11 @@
-// Volcengine Doubao Search Global edition: POST /search_api/global_search.
-// See https://docs.volcengine.com/docs/Networkedsearch/doubao-search-global-edition
+// Volcengine Doubao Search, Custom edition: POST /search_api/web_search.
+// See https://docs.volcengine.com/docs/Networkedsearch/Networkedsearch-2
+//
+// The Custom edition is the one to talk to. It serves both billing modes —
+// pay-as-you-go and subscription plan — each with its own API key, whereas the
+// Global edition (/search_api/global_search) covers more of the world but
+// answers a subscription-plan key with 10409, "this plan does not support this
+// search type". A key bought as a package would never work there.
 import { ApiKeyFailureError, quotaClassOf, splitApiKeys } from '../util/apiKeys.ts';
 import { redactSecrets } from '../util/redact.ts';
 import { requestText } from '../util/timedRequest.ts';
@@ -7,10 +13,26 @@ import type { EngineRequest, EngineOutput, SearchEngine } from './index.ts';
 import { resolveEndpoint } from './endpoint.ts';
 
 const DEFAULT_MAX_RESULTS = 10;
-const MAX_RESULTS = 20;
+/** The Custom edition's `Count` ceiling. */
+const MAX_RESULTS = 50;
 const DOUBAO_DEFAULT_BASE = 'https://open.feedcoopapi.com';
-const DOUBAO_PATH = '/search_api/global_search';
-const KEY_FAILURE_CODES = new Set(['10403', '10408', '10410', '10412', '700429', '700901']);
+const DOUBAO_PATH = '/search_api/web_search';
+
+/**
+ * The codes that make the key itself the problem, so the next sibling key
+ * deserves a turn: a permission error, a search type the account cannot use, an
+ * exhausted free allowance or plan quota, and the QPS ceiling.
+ */
+const KEY_FAILURE_CODES = new Set([
+  '10403', // permission error
+  '10406', // free search allowance exhausted
+  '10408', // service not paid for
+  '10409', // this plan does not support this search type
+  '10410', // no available subscription plan
+  '10412', // subscription plan quota exhausted
+  '700429', // concurrent QPS ceiling
+  '700901', // invalid API key (Global edition wording)
+]);
 
 /**
  * The codes whose meaning the shared classifiers need spelled out, in the
@@ -20,21 +42,18 @@ const KEY_FAILURE_CODES = new Set(['10403', '10408', '10410', '10412', '700429',
  * to rediscover the wall. `quota` parks the engine; `rate` stays transient.
  */
 const CODE_CLASS: Record<string, 'quota' | 'rate'> = {
-  '10412': 'quota', // search plan quota exhausted
-  '700429': 'rate', // request frequency over the limit
+  '10406': 'quota', // free search allowance exhausted
+  '10412': 'quota', // subscription plan quota exhausted
+  '700429': 'rate', // concurrent QPS ceiling
 };
 
-interface DoubaoSnippet {
-  Type?: string;
-  Text?: string;
-}
-
-interface DoubaoDocument {
-  Url?: string;
+interface DoubaoWebItem {
   Title?: string;
-  Snippet?: DoubaoSnippet[];
-  DocumentInfo?: { PublishTime?: string };
-  HostInfo?: { Hostname?: string };
+  Url?: string;
+  Snippet?: string;
+  Summary?: string;
+  SiteName?: string;
+  PublishTime?: string;
 }
 
 interface DoubaoResponse {
@@ -44,7 +63,7 @@ interface DoubaoResponse {
   Result?: {
     ErrorCode?: string | number;
     ErrorMsg?: string;
-    Documents?: DoubaoDocument[];
+    WebResults?: DoubaoWebItem[];
   } | null;
 }
 
@@ -79,7 +98,7 @@ export async function executeDoubaoSearch(options: EngineRequest): Promise<Engin
     throw new Error(redactSecrets(message, secrets));
   }
 
-  const docCount = Math.min(options.maxResults ?? DEFAULT_MAX_RESULTS, MAX_RESULTS);
+  const count = Math.min(options.maxResults ?? DEFAULT_MAX_RESULTS, MAX_RESULTS);
   const startedAt = Date.now();
   const { response, text } = await requestText(
     'doubao',
@@ -93,8 +112,11 @@ export async function executeDoubaoSearch(options: EngineRequest): Promise<Engin
       body: JSON.stringify({
         Query: options.query,
         SearchType: 'web',
-        DocCount: docCount,
-        MaxSnippetLength: 500,
+        Count: count,
+        // A result with no landing page cannot become a citation, and the
+        // canonical item is built around one. `NeedUrl` also drops the 火山如意
+        // card results, which carry structured data but no URL.
+        Filter: { NeedUrl: true },
       }),
     },
     AbortSignal.timeout(options.timeoutMs),
@@ -105,9 +127,8 @@ export async function executeDoubaoSearch(options: EngineRequest): Promise<Engin
   if (!response.ok) {
     const detail = redactSecrets(text.trim(), secrets);
     const cls = quotaClassOf(detail);
-    const label = cls === 'quota' ? ' (quota)' : cls === 'rate' ? ' (rate limit)' : '';
     const message = redactSecrets(
-      `doubao returned ${response.status} ${response.statusText}${label}.${detail ? ` ${detail}` : ''}`,
+      `doubao returned ${response.status} ${response.statusText}${classLabel(cls)}.${detail ? ` ${detail}` : ''}`,
       secrets,
     );
     // A server error is transient even if its body happens to mention a key or quota.
@@ -141,12 +162,8 @@ export async function executeDoubaoSearch(options: EngineRequest): Promise<Engin
     throw createApiError(apiError, secrets);
   }
 
-  const documents = data?.Result?.Documents ?? [];
-  const items = documents.map((document) => {
-    const snippet = (document.Snippet ?? [])
-      .filter((part) => part.Type === 'text' && typeof part.Text === 'string')
-      .map((part) => part.Text as string)
-      .join('\n');
+  const webResults = data?.Result?.WebResults ?? [];
+  const items = webResults.map((result) => {
     const item: {
       title: string;
       url: string;
@@ -154,12 +171,15 @@ export async function executeDoubaoSearch(options: EngineRequest): Promise<Engin
       source: string | undefined;
       published_at?: string;
     } = {
-      title: document.Title ?? '',
-      url: document.Url ?? '',
-      snippet,
-      source: document.HostInfo?.Hostname,
+      title: result.Title ?? '',
+      url: result.Url ?? '',
+      // The vendor documents `Summary` as the 500–1000 character passage cut
+      // around the query and recommends it for model use; `Snippet` is the
+      // ~200 character list-view teaser. Prefer the one meant for this.
+      snippet: result.Summary?.trim() || result.Snippet?.trim() || '',
+      source: result.SiteName,
     };
-    const publishedAt = document.DocumentInfo?.PublishTime;
+    const publishedAt = result.PublishTime?.trim();
     if (publishedAt) {
       item.published_at = publishedAt;
     }
@@ -182,6 +202,13 @@ export async function executeDoubaoSearch(options: EngineRequest): Promise<Engin
       usage: { resultCount: items.length },
     },
   };
+}
+
+/** Spell the class in the neutral English the shared cooldown classifier reads. */
+function classLabel(cls: 'quota' | 'rate' | null): string {
+  if (cls === 'quota') return ' (quota)';
+  if (cls === 'rate') return ' (rate limit)';
+  return '';
 }
 
 function parseJsonIfPossible(text: string): unknown {
@@ -224,9 +251,8 @@ function getApiError(payload: unknown): DoubaoApiError | null {
 function createApiError(apiError: DoubaoApiError, secrets: ReadonlyArray<string | undefined | null>): Error {
   const detail = redactSecrets(apiError.message, secrets);
   const cls = CODE_CLASS[apiError.code] ?? quotaClassOf(detail);
-  const label = cls === 'quota' ? ' (quota)' : cls === 'rate' ? ' (rate limit)' : '';
   const message = redactSecrets(
-    `doubao returned API error${apiError.code ? ` ${apiError.code}` : ''}${label}.${detail ? ` ${detail}` : ''}`,
+    `doubao returned API error${apiError.code ? ` ${apiError.code}` : ''}${classLabel(cls)}.${detail ? ` ${detail}` : ''}`,
     secrets,
   );
   if (KEY_FAILURE_CODES.has(apiError.code) || isKeyRelatedMessage(detail)) {
@@ -236,11 +262,11 @@ function createApiError(apiError: DoubaoApiError, secrets: ReadonlyArray<string 
 }
 
 /**
- * The live endpoint does not always answer with a numeric code: a bad key comes
- * back as `{"Error":{"Code":"invalid_api_key","Message":"invalid api key"}}`.
- * A named code the table cannot know still has to rotate the sibling keys, so
- * the message decides when the code does not. `quotaClassOf` covers the vendor's
- * own Chinese wording for a spent quota or a rate limit.
+ * The endpoint does not always answer with a numeric code: a bad key comes back
+ * as `{"Error":{"Code":"invalid_api_key","Message":"invalid api key"}}`. A named
+ * code the table cannot know still has to rotate the sibling keys, so the
+ * message decides when the code does not. `quotaClassOf` covers the vendor's own
+ * Chinese wording for a spent quota or a rate limit.
  */
 function isKeyRelatedMessage(message: string): boolean {
   return (
@@ -258,9 +284,9 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export const doubaoProvider: SearchEngine = {
   name: 'doubao',
   roles: ['search'],
-  requirement: 'set a Volcengine Doubao Search Global API key',
+  requirement: 'set a Volcengine Doubao Search API key',
   isAvailable: (settings, env) =>
     splitApiKeys(settings.apiKey).length > 0 || splitApiKeys(env.DOUBAO_API_KEY).length > 0,
-  defaultModel: 'doubao-search-global',
+  defaultModel: 'doubao-search-custom',
   execute: executeDoubaoSearch,
 };
