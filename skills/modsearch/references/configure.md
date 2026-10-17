@@ -171,9 +171,17 @@ modsearch config set keenable.apiKey <key>
 
 Keenable searches only, so `-u` with `-e keenable` is an error. Like Exa, it returns ranked links with snippets (and a publish date when Keenable has one) but writes no synthesis, so its summary is mechanical, a warning says so, and the evidence is in `items`.
 
-### doubao — Volcengine Doubao Search Global edition (search only, key required)
+### doubao — Volcengine Doubao Search Custom edition (search only, key required)
 
-Create a Doubao Search API key in Volcengine, then configure it. This engine has no keyless tier. Its default request is `POST https://open.feedcoopapi.com/search_api/global_search` with `Authorization: Bearer <key>`. The API's `DocCount` maximum is 20. Each Volcengine account gets 500 free calls/month shared with the Custom edition; the Global edition is pay-as-you-go only, with no subscription plans, and is limited to 10 QPS per account.
+Create a Doubao Search API key in Volcengine, then configure it. This engine remains search-only and has no keyless tier. The Custom edition supports both pay-as-you-go and subscription plans, and each billing mode has its own API key. The default request is `POST https://open.feedcoopapi.com/search_api/web_search` with `Authorization: Bearer <key>` and this JSON body:
+
+```json
+{ "Query": "<query>", "SearchType": "web", "Count": N, "Filter": { "NeedUrl": true } }
+```
+
+`Count` defaults to 10 and has a maximum of 50. `Filter.NeedUrl: true` keeps only results with a landing page and drops 火山如意 card results, which have no URL. The response is `Result.WebResults[]`; each item has `{ Id, SortId, Title, SiteName, Url, Snippet, Summary, Content, PublishTime, LogoUrl, RankScore, AuthInfoDes, AuthInfoLevel, ContentFormats, InlineImages, AuthorInfo, RuyiInfo }`. The engine maps `Title`→title, `Url`→url, `Summary` when present else `Snippet`→snippet, `SiteName`→source, and `PublishTime`→published_at. The vendor documents `Summary` as the 500–1,000-character query-relevant passage recommended for model use, while `Snippet` is the ~200-character list-view teaser.
+
+Each Volcengine account gets 500 free calls/month from a shared Doubao Search pool, consumed first regardless of billing mode. The default limit is 10 QPS per account and can be raised by ticket. `DOUBAO_API_KEY` and `DOUBAO_BASE_URL` are unchanged. Error codes: `10400` general parameter error; `10402` illegal search type; `10403` permission error; `10406` free search allowance exhausted; `10408` service not paid for; `10409` the plan does not support this search type; `10410` no available subscription plan; `10412` subscription plan quota exhausted; `10500` internal error (retryable); `700429` concurrent QPS ceiling. `10409` specifically means a subscription-plan key was used against an edition that does not accept it; the Custom endpoint used here supports both billing modes.
 
 ```bash
 modsearch config set doubao.apiKey <key>
@@ -181,9 +189,9 @@ modsearch config set doubao.apiKey <key>
 # optional endpoint override: export DOUBAO_BASE_URL=<url>
 ```
 
-### zhihu — Zhihu Data Open Platform global_search (search only, key required)
+### zhihu — Zhihu Data Open Platform public-web search (search only, key required)
 
-Create an access secret in the Zhihu Data Open Platform. The global search covers all public web content, not only zhihu.com, and has no keyless tier. The default request is `GET https://developer.zhihu.com/api/v1/content/global_search`, with `Authorization: Bearer <key>` and `X-Request-Timestamp: <unix seconds>`. Query parameters are `Query`, `Count` (maximum 20), `Filter`, and `SearchDB`. Results include author, vote-up count, and an authority level.
+Create an access secret in the Zhihu Data Open Platform. Its public-web search covers all public web content, not only zhihu.com, and has no keyless tier. The default request is `GET https://developer.zhihu.com/api/v1/content/global_search`, with `Authorization: Bearer <key>` and `X-Request-Timestamp: <unix seconds>`. Query parameters are `Query`, `Count` (maximum 20), `Filter`, and `SearchDB`. Results include author, vote-up count, and an authority level.
 
 ```bash
 modsearch config set zhihu.apiKey <access-secret>
@@ -214,9 +222,9 @@ modsearch config set baidu.apiKey <key>
 
 ### Third-party compatible endpoints (tavily, exa, firecrawl, keenable, doubao, zhihu, baidu)
 
-The HTTP engines can point at an endpoint that speaks the same API as the official one: a reseller gateway, a regional proxy, a self-hosted deployment. For Tavily, Exa, Firecrawl, and Keenable, set `baseURL` and the engine appends its documented path (`/search` for Tavily and Exa, `/v2/search` and `/v2/scrape` for Firecrawl, `/v1/search` for keyed Keenable and `/v1/search/public` for keyless Keenable), so a base of `https://gw.example.com/tavily` posts to `https://gw.example.com/tavily/search`. Doubao, Zhihu, and Baidu Qianfan have the provider-specific default endpoint paths listed above; `baseURL` / its environment variable overrides that endpoint.
+The HTTP engines can point at an endpoint that speaks the same API as the official one: a reseller gateway, a regional proxy, a self-hosted deployment. For Tavily, Exa, Firecrawl, and Keenable, set `baseURL` and the engine appends its documented path (`/search` for Tavily and Exa, `/v2/search` and `/v2/scrape` for Firecrawl, `/v1/search` for keyed Keenable and `/v1/search/public` for keyless Keenable), so a base of `https://gw.example.com/tavily` posts to `https://gw.example.com/tavily/search`. Doubao, Zhihu, and Baidu Qianfan have provider-specific default endpoints described in their sections above; `baseURL` / its environment variable overrides that endpoint.
 
-The official endpoints are built into the providers: `https://api.tavily.com`, `https://api.exa.ai`, `https://api.firecrawl.dev`, `https://api.keenable.ai`, `https://open.feedcoopapi.com/search_api/global_search`, `https://developer.zhihu.com/api/v1/content/global_search`, and `https://qianfan.baidubce.com/v2/ai_search/web_search`. They are not copied into `config.json`. An absent or cleared `baseURL` means to use the built-in official endpoint, which lets a later release correct that default without a stale file overriding it. The dsh settings card follows the same rule.
+The official endpoints are built into the providers: `https://api.tavily.com`, `https://api.exa.ai`, `https://api.firecrawl.dev`, `https://api.keenable.ai`, `https://open.feedcoopapi.com/search_api/web_search`, `GET https://developer.zhihu.com/api/v1/content/global_search`, and `https://qianfan.baidubce.com/v2/ai_search/web_search`. They are not copied into `config.json`. An absent or cleared `baseURL` means to use the built-in official endpoint, which lets a later release correct that default without a stale file overriding it. The dsh settings card follows the same rule.
 
 ```bash
 modsearch config set tavily.baseURL https://gw.example.com/tavily
@@ -279,10 +287,12 @@ modsearch state clear               # forget every cooldown now
 - `Blocked private network target`: SSRF guard. If the user is behind a VPN, retry with `--allow-private-network`.
 - Wrong engine name in config: modsearch says so in `warnings` and uses a working engine anyway. Fix the name when the user wants that engine back.
 - Timeouts: retry once with `--timeout 300000` before reporting failure.
-- Doubao is not ready / reports a missing key: Doubao is keyed only. Set `modsearch config set doubao.apiKey <key>` or `DOUBAO_API_KEY`; a non-empty environment value overrides the config file.
+- Doubao is not ready / reports a missing key: Doubao is keyed only. Set `modsearch config set doubao.apiKey <key>` or `DOUBAO_API_KEY`; a non-empty environment value overrides the config file. The Custom edition accepts both pay-as-you-go and subscription-plan keys, which are separate credentials.
 - Doubao returns 401/403: replace the invalid or revoked API key and confirm the account is allowed to use Doubao Search. Check `DOUBAO_API_KEY` too, since it takes precedence over the saved key.
-- Doubao reports quota or rate-limit exhaustion: keep requests at or below 10 QPS per account. The 500 free calls/month are shared across Volcengine's account and Custom edition; Global is pay-as-you-go only, not subscription-based. Keep `DocCount` at 20 or below, and check account usage/billing before retrying.
-- Doubao returns an endpoint or route error: clear the override with `modsearch config set doubao.baseURL ""` and unset `DOUBAO_BASE_URL` to restore `POST https://open.feedcoopapi.com/search_api/global_search`; verify it is a POST and uses Bearer auth.
+- Doubao reports quota or rate-limit exhaustion: its 500 free calls/month per Volcengine account are shared across Doubao Search offerings and consumed first regardless of billing mode. The Custom edition supports both billing modes; the default limit is 10 QPS/account and can be raised by ticket. `Count` defaults to 10 and must not exceed 50; check account usage/billing before retrying.
+- Doubao returns error `10409`: this specifically means a subscription-plan key was used against an edition that does not accept it. The Custom endpoint used by this engine supports both pay-as-you-go and subscription-plan keys; check that `DOUBAO_BASE_URL` or `baseURL` does not point to an incompatible edition.
+- Doubao returns an endpoint or route error: clear the override with `modsearch config set doubao.baseURL ""` and unset `DOUBAO_BASE_URL` to restore `POST https://open.feedcoopapi.com/search_api/web_search`; verify Bearer auth and the body fields `Query`, `SearchType: "web"`, `Count`, and `Filter: { "NeedUrl": true }`. `NeedUrl` filters out results without landing-page URLs, including 火山如意 cards.
+- Doubao results are missing a useful snippet: the engine prefers `Summary` when present and otherwise uses `Snippet`; the vendor recommends the 500–1,000-character query-relevant `Summary` for model use over the ~200-character list-view `Snippet`.
 - Zhihu is not ready / reports a missing key: configure the platform's access secret with `modsearch config set zhihu.apiKey <access-secret>` or `ZHIHU_API_KEY`.
 - Zhihu returns 401/403: confirm the access secret is valid and authorized for global search, and check `ZHIHU_API_KEY` for an overriding value. The request also needs a current `X-Request-Timestamp` containing Unix seconds.
 - Zhihu reports quota or rate-limit exhaustion: check the Zhihu Data Open Platform for the account's usage and reset information, or let automatic failover use another search engine. Keep `Count` at 20 or below; this is a per-request result cap, not a stated rate quota.

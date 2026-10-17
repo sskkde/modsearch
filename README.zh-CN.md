@@ -74,13 +74,13 @@ Firecrawl 和 Keenable 零配置直接可用，其余引擎各一条命令。key
 | Antigravity CLI | 网页搜索 + 单页抓取 | 免费，浏览器登录 | 安装 `agy` 并登录 |
 | Tavily | 网页搜索 | 每月 1,000 credits，不绑卡 | `modsearch config set tavily.apiKey <key>` |
 | Exa | 网页搜索 | 每月 $10 循环额度（约 1,400 次），不绑卡 | `modsearch config set exa.apiKey <key>` |
-| Doubao（火山引擎豆包搜索 Global 版） | 网页搜索 | 必须配置 key；每个火山引擎账号每月赠送 500 次，与 Custom 版共享；每账号 10 QPS。Global 版仅按量付费，没有订阅套餐 | `modsearch config set doubao.apiKey <key>` |
-| Zhihu（`global_search`） | 全网网页搜索，不限于 zhihu.com | 必须配置 key（平台称为 access secret）；额度与计费由知乎数据开放平台确定 | `modsearch config set zhihu.apiKey <key>` |
+| Doubao（火山引擎豆包搜索 Custom 版） | 网页搜索 | 必须配置 key；支持按量后付费和订阅套餐（两种计费方式各有自己的 API key）；每个火山引擎账号每月免费 500 次，豆包搜索各项服务共用；默认每账号 10 QPS，可提交工单申请提高 | `modsearch config set doubao.apiKey <key>` |
+| Zhihu（知乎数据开放平台） | 全网网页搜索，不限于 zhihu.com | 必须配置 key（平台称为 access secret）；额度与计费由知乎数据开放平台确定 | `modsearch config set zhihu.apiKey <key>` |
 | Baidu Qianfan（`ai_search web_search`） | 网页搜索 | 必须配置 key；每月免费 1,500 次、每日发放，用完后按量付费；不同版本价格不同 | `modsearch config set baidu.apiKey <key>` |
 | Grok Build | X（推特）搜索 | 随 SuperGrok 或 X Premium 订阅 | 安装 `grok` 并登录 |
 | local | 单页抓取 | 内置，零安装 | 无需任何操作 |
 
-以上三个新引擎都只搜索且必须配置 key，没有免 key 档。默认端点分别是 Doubao：`POST https://open.feedcoopapi.com/search_api/global_search`（Bearer 鉴权）；Zhihu：`GET https://developer.zhihu.com/api/v1/content/global_search`（Bearer 鉴权和 `X-Request-Timestamp`）；百度千帆：`POST https://qianfan.baidubce.com/v2/ai_search/web_search`（Bearer 鉴权）。详细请求参数与限制见[配置指南](skills/modsearch/references/configure.zh-CN.md)。
+以上三个新引擎都只搜索且必须配置 key，没有免 key 档。Doubao 使用 Custom 版端点 `POST https://open.feedcoopapi.com/search_api/web_search`，采用 Bearer 鉴权，请求体为 `{ "Query": "<query>", "SearchType": "web", "Count": N, "Filter": { "NeedUrl": true } }`。`Count` 默认 10、最大 50；`Filter.NeedUrl: true` 只保留带落地页 URL 的结果，并丢弃没有 URL 的火山如意卡片。引擎把 `Title` 映射为 title、`Url` 映射为 url、优先把 `Summary`（缺失时才用 `Snippet`）映射为 snippet、`SiteName` 映射为 source、`PublishTime` 映射为 published_at；厂商建议模型使用与查询相关的 500–1000 字 `Summary`，而列表页的 `Snippet` 约 200 字。错误 `10409` 表示订阅套餐 key 被用于不支持该搜索类型的版本；本引擎使用的 Custom 端点支持按量后付费和订阅套餐 key。每个账号每月的 500 次免费调用由豆包搜索各项服务共享，并且无论计费方式如何都会优先消耗；默认每账号 10 QPS，可提交工单申请提高。Zhihu 使用 `GET https://developer.zhihu.com/api/v1/content/global_search`，并采用 Bearer 鉴权与 `X-Request-Timestamp`；百度千帆使用 `POST https://qianfan.baidubce.com/v2/ai_search/web_search` 并采用 Bearer 鉴权。详细请求参数与限制见[配置指南](skills/modsearch/references/configure.zh-CN.md)。
 
 key 和端点覆盖也可走环境变量：`TAVILY_API_KEY`、`EXA_API_KEY`、`FIRECRAWL_API_KEY`、`KEENABLE_API_KEY`、`DOUBAO_API_KEY`、`ZHIHU_API_KEY`、`BAIDU_API_KEY`，以及 `TAVILY_BASE_URL`、`EXA_BASE_URL`、`FIRECRAWL_BASE_URL`、`KEENABLE_BASE_URL`、`DOUBAO_BASE_URL`、`ZHIHU_BASE_URL`、`BAIDU_BASE_URL`。同一引擎可在配置文件或环境变量中写入逗号分隔的多个 key，例如 `key-one,key-two`。配了多个引擎就自动故障转移，搜索顺序为 `firecrawl` → `keenable` → `antigravity-cli` → `tavily` → `exa` → `doubao` → `zhihu` → `baidu`。每个引擎默认都参与，可以用 `modsearch config set tavily.enabled false` 排除一个。想用兼容的第三方或自建端点？用 `baseURL` 指向它，例如 `modsearch config set doubao.baseURL <url>`。官方地址始终内置在代码里，不会作为默认配置写入文件。每个引擎的全部配置项见[配置指南](skills/modsearch/references/configure.zh-CN.md)。
 

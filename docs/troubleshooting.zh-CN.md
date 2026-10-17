@@ -113,12 +113,16 @@ tavily is out of monthly quota (HTTP 432). ...
 
 ## 豆包搜索（火山引擎）
 
-Doubao 只负责搜索，始终需要 key，没有免 key 档。
+Doubao 仍只负责搜索且必须配置 key，没有免 key 档。引擎现在使用 Custom 版，支持按量后付费和订阅套餐，两种计费方式各有独立 API key。环境变量仍为 `DOUBAO_API_KEY` 和 `DOUBAO_BASE_URL`。
 
 - **缺少 key：** 运行 `modsearch doctor`，然后执行 `modsearch config set doubao.apiKey <key>` 或设置 `DOUBAO_API_KEY`。非空环境变量优先于配置文件。
 - **401/403：** 换成有效且未吊销的 key，并确认火山引擎账号有权调用豆包搜索。检查是否存在覆盖配置文件的 `DOUBAO_API_KEY`。
-- **额度或限流：** 每个账号控制在 10 QPS 以内。每个火山引擎账号每月获赠 500 次，与 Custom 版共享；Global 版仅按量付费，没有订阅套餐。`DocCount` 不得超过 20；检查账号用量和计费，或让自动故障转移改用其他引擎。
-- **端点错误：** 执行 `modsearch config set doubao.baseURL ""` 并取消设置 `DOUBAO_BASE_URL`，恢复默认端点 `POST https://open.feedcoopapi.com/search_api/global_search`，并确认使用 Bearer 鉴权。
+- **额度或限流：** 每个火山引擎账号每月获赠 500 次免费调用，由豆包搜索各项服务共用，并且不论计费方式如何都会优先消耗。默认每账号 10 QPS，可提交工单申请提高。检查账号用量和计费，或让自动故障转移改用其他引擎。
+- **默认请求与结果数：** 端点是 `POST https://open.feedcoopapi.com/search_api/web_search`，使用 Bearer 鉴权，请求体为 `{ "Query": <query>, "SearchType": "web", "Count": N, "Filter": { "NeedUrl": true } }`。`Count` 默认 10、最大 50。`Filter.NeedUrl: true` 只保留带落地页 URL 的结果，并丢弃没有 URL 的火山如意卡片。
+- **结果映射：** `Result.WebResults[]` 每项把 `Title` 映射为 title、`Url` 映射为 url、优先把 `Summary`（有值时）否则 `Snippet` 映射为 snippet、`SiteName` 映射为 source、`PublishTime` 映射为 published_at。厂商建议模型使用与查询相关的 500–1000 字 `Summary`；`Snippet` 是约 200 字的列表页预览。
+- **10409：** 特指订阅套餐 key 被用于不接受该套餐的版本。本引擎使用的 Custom 版端点支持两种计费方式；检查 `DOUBAO_BASE_URL` 是否覆盖到不兼容的版本。
+- **其他 API 错误：** `10400` 通用参数错误；`10402` 搜索类型非法；`10403` 权限错误；`10406` 免费搜索额度耗尽；`10408` 服务未付费；`10410` 没有可用订阅套餐；`10412` 订阅套餐额度耗尽；`10500` 内部错误（可重试）；`700429` 并发 QPS 上限。
+- **端点错误：** 执行 `modsearch config set doubao.baseURL ""` 并取消设置 `DOUBAO_BASE_URL`，恢复默认端点 `POST https://open.feedcoopapi.com/search_api/web_search`，并确认使用 Bearer 鉴权。
 
 ## 知乎全网搜索
 

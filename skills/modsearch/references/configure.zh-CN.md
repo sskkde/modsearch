@@ -170,9 +170,17 @@ modsearch config set keenable.apiKey <key>
 
 Keenable 只搜索，所以 `-u` 配 `-e keenable` 会报错。它和 Exa 一样返回排好序的链接和片段（Keenable 有发布日期时也带上），但不写综述，所以 summary 是机械拼的，会有一条 warning 说明这一点，证据在 `items` 里。
 
-### doubao（火山引擎 豆包搜索 Global 版；仅搜索，必须配置 key）
+### doubao（火山引擎豆包搜索 Custom 版；仅搜索，必须配置 key）
 
-在火山引擎创建豆包搜索 API key。此引擎没有免 key 档。默认请求为 `POST https://open.feedcoopapi.com/search_api/global_search`，使用 `Authorization: Bearer <key>`。API 的 `DocCount` 最大值为 20。每个火山引擎账号每月获赠 500 次，与 Custom 版共享；每账号限 10 QPS。Global 版仅按量付费，没有订阅套餐。
+在火山引擎创建豆包搜索 API key。引擎仍只负责搜索且没有免 key 档。Custom 版支持按量后付费和订阅套餐，两种计费方式各有自己的 API key。默认请求为 `POST https://open.feedcoopapi.com/search_api/web_search`，使用 `Authorization: Bearer <key>`，请求体为：
+
+```json
+{ "Query": "<query>", "SearchType": "web", "Count": N, "Filter": { "NeedUrl": true } }
+```
+
+`Count` 默认 10、最大 50。`Filter.NeedUrl: true` 只保留带落地页 URL 的结果，并丢弃没有 URL 的火山如意卡片。响应为 `Result.WebResults[]`；每项包含 `{ Id, SortId, Title, SiteName, Url, Snippet, Summary, Content, PublishTime, LogoUrl, RankScore, AuthInfoDes, AuthInfoLevel, ContentFormats, InlineImages, AuthorInfo, RuyiInfo }`。引擎把 `Title` 映射为 title、`Url` 映射为 url、优先把 `Summary`（缺失时才用 `Snippet`）映射为 snippet、`SiteName` 映射为 source、`PublishTime` 映射为 published_at。厂商将 `Summary` 定义为建议模型使用的、与查询相关的 500–1,000 字内容段；`Snippet` 是约 200 字的列表页预览。
+
+每个火山引擎账号每月获赠 500 次免费调用，由豆包搜索各项服务共用，并且无论计费方式如何都会优先消耗。默认每账号 10 QPS，可提交工单申请提高。`DOUBAO_API_KEY` 和 `DOUBAO_BASE_URL` 环境变量保持不变。错误码：`10400` 通用参数错误；`10402` 搜索类型非法；`10403` 权限错误；`10406` 免费搜索额度耗尽；`10408` 服务未付费；`10409` 套餐不支持该搜索类型；`10410` 没有可用订阅套餐；`10412` 订阅套餐额度耗尽；`10500` 内部错误（可重试）；`700429` 并发 QPS 上限。`10409` 特指：订阅套餐 key 被用于不接受它的版本；本引擎使用的 Custom 端点同时支持两种计费方式。
 
 ```bash
 modsearch config set doubao.apiKey <key>
@@ -180,7 +188,7 @@ modsearch config set doubao.apiKey <key>
 # 可选端点覆盖：export DOUBAO_BASE_URL=<url>
 ```
 
-### zhihu（知乎数据开放平台 全网搜索 `global_search`；仅搜索，必须配置 key）
+### zhihu（知乎数据开放平台全网搜索；仅搜索，必须配置 key）
 
 在知乎数据开放平台注册 access secret（平台对 key 的称呼）。全网搜索覆盖所有公开网页内容，不限于 zhihu.com，且没有免 key 档。默认请求为 `GET https://developer.zhihu.com/api/v1/content/global_search`，请求头包含 `Authorization: Bearer <key>` 和 `X-Request-Timestamp: <unix seconds>`。查询参数为 `Query`、`Count`（最大 20）、`Filter`、`SearchDB`。结果包含作者、赞同数和权威等级。
 
@@ -213,9 +221,9 @@ modsearch config set baidu.apiKey <key>
 
 ### 第三方兼容端点（tavily、exa、firecrawl、keenable、doubao、zhihu、baidu）
 
-HTTP 引擎可以指向任何与官方 API 同协议的端点：转售网关、区域代理、自建部署。对于 Tavily、Exa、Firecrawl 和 Keenable，设置 `baseURL` 后，引擎会拼接文档路径（Tavily 和 Exa 是 `/search`，Firecrawl 是 `/v2/search` 和 `/v2/scrape`，Keenable 带 key 时是 `/v1/search`，免注册时是 `/v1/search/public`），所以 base 为 `https://gw.example.com/tavily` 时会请求 `https://gw.example.com/tavily/search`。Doubao、Zhihu 和百度千帆的默认端点路径各不相同，见上方各自小节；`baseURL` / 对应环境变量会覆盖该端点。
+HTTP 引擎可以指向任何与官方 API 同协议的端点：转售网关、区域代理、自建部署。对于 Tavily、Exa、Firecrawl 和 Keenable，设置 `baseURL` 后，引擎会拼接文档路径（Tavily 和 Exa 是 `/search`，Firecrawl 是 `/v2/search` 和 `/v2/scrape`，Keenable 带 key 时是 `/v1/search`，免注册时是 `/v1/search/public`），所以 base 为 `https://gw.example.com/tavily` 时会请求 `https://gw.example.com/tavily/search`。Doubao、Zhihu 和百度千帆的默认端点见上方各自小节；`baseURL` / 对应环境变量会覆盖该端点。
 
-官方端点内置在 provider 代码里，分别是 `https://api.tavily.com`、`https://api.exa.ai`、`https://api.firecrawl.dev`、`https://api.keenable.ai`、`https://open.feedcoopapi.com/search_api/global_search`、`https://developer.zhihu.com/api/v1/content/global_search` 和 `https://qianfan.baidubce.com/v2/ai_search/web_search`。它们不会被复制进 `config.json`。`baseURL` 缺失或被清空都表示使用内置官方端点，这样后续版本修正默认值时不会被旧配置文件压住。dsh 设置卡片也遵守同一规则。
+官方端点内置在 provider 代码里，分别是 `https://api.tavily.com`、`https://api.exa.ai`、`https://api.firecrawl.dev`、`https://api.keenable.ai`、`https://open.feedcoopapi.com/search_api/web_search`、`GET https://developer.zhihu.com/api/v1/content/global_search`，以及 `https://qianfan.baidubce.com/v2/ai_search/web_search`。它们不会被复制进 `config.json`。`baseURL` 缺失或被清空都表示使用内置官方端点，这样后续版本修正默认值时不会被旧配置文件压住。dsh 设置卡片也遵守同一规则。
 
 ```bash
 modsearch config set tavily.baseURL https://gw.example.com/tavily
@@ -278,10 +286,12 @@ modsearch state clear               # 立即忘掉所有冷却
 - `Blocked private network target`：SSRF 防护。用户在 VPN 后面的话，用 `--allow-private-network` 重试。
 - 配置里引擎名写错：modsearch 在 `warnings` 里说明，并照常用一个能干活的引擎。用户想要回那个引擎时把名字改对。
 - 超时：先用 `--timeout 300000` 重试一次再上报失败。
-- Doubao 未就绪或提示缺少 key：豆包搜索只支持带 key 的请求。运行 `modsearch config set doubao.apiKey <key>`，或设置 `DOUBAO_API_KEY`；非空环境变量会覆盖配置文件中的值。
+- Doubao 未就绪或提示缺少 key：豆包搜索只支持带 key 的请求。运行 `modsearch config set doubao.apiKey <key>`，或设置 `DOUBAO_API_KEY`；非空环境变量会覆盖配置文件中的值。Custom 版支持按量后付费和订阅套餐，两种计费方式各有自己的 API key。
 - Doubao 返回 401/403：换成有效且未吊销的 API key，并确认账号有权使用豆包搜索。也要检查优先级更高的 `DOUBAO_API_KEY`。
-- Doubao 提示额度或限流耗尽：每个账号控制在 10 QPS 以内。每月 500 次免费额度由火山引擎账号与 Custom 版共享；Global 版仅按量付费，没有订阅套餐。`DocCount` 不得超过 20；重试前检查账号用量与计费状态。
-- Doubao 返回端点或路由错误：运行 `modsearch config set doubao.baseURL ""` 并取消设置 `DOUBAO_BASE_URL`，恢复到 `POST https://open.feedcoopapi.com/search_api/global_search`；确认使用 POST 和 Bearer 鉴权。
+- Doubao 提示额度或限流耗尽：每个火山引擎账号每月 500 次免费调用，由豆包搜索各项服务共用，并且无论计费方式如何都会优先消耗。Custom 版同时支持两种计费方式；默认每账号 10 QPS，可提交工单申请提高。`Count` 默认 10、不得超过 50；重试前检查账号用量与计费状态。
+- Doubao 返回 `10409`：特指订阅套餐 key 被用于不接受该套餐的版本。本引擎使用的 Custom 端点同时支持按量后付费和订阅套餐；检查 `DOUBAO_BASE_URL` 或 `baseURL` 是否指向不兼容的版本。
+- Doubao 返回端点或路由错误：运行 `modsearch config set doubao.baseURL ""` 并取消设置 `DOUBAO_BASE_URL`，恢复到 `POST https://open.feedcoopapi.com/search_api/web_search`；确认使用 Bearer 鉴权，请求体含 `Query`、`SearchType: "web"`、`Count` 和 `Filter: { "NeedUrl": true }`。`NeedUrl` 会过滤没有落地页 URL 的结果，包括火山如意卡片。
+- Doubao 结果缺少合适的摘要片段：引擎优先使用 `Summary`，仅在其缺失时才使用 `Snippet`；厂商建议模型使用与查询相关的 500–1,000 字 `Summary`，而列表预览 `Snippet` 约 200 字。
 - Zhihu 未就绪或提示缺少 key：用 `modsearch config set zhihu.apiKey <access-secret>` 或 `ZHIHU_API_KEY` 配置知乎数据开放平台的 access secret。
 - Zhihu 返回 401/403：确认 access secret 有效且已获准调用全网搜索，并检查是否有优先级更高的 `ZHIHU_API_KEY`。请求还需要包含当前 Unix 秒数格式的 `X-Request-Timestamp`。
 - Zhihu 提示额度或限流耗尽：到知乎数据开放平台检查账号用量与重置说明，或让自动故障转移使用其他搜索引擎。`Count` 不得超过 20；这是单次请求的结果数上限，不代表平台限流额度。

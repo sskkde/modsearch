@@ -89,7 +89,7 @@ modsearch config set firecrawl.keylessFetch false
 modsearch config set cooldown off
 ```
 
-搜索顺序为 `firecrawl` → `keenable` → `antigravity-cli` → `tavily` → `exa` → `doubao` → `zhihu` → `baidu`。Doubao、Zhihu 和百度千帆只负责搜索且必须配置 key，没有免 key 档。默认端点分别是 Doubao：`POST https://open.feedcoopapi.com/search_api/global_search`；Zhihu：`GET https://developer.zhihu.com/api/v1/content/global_search`；百度千帆：`POST https://qianfan.baidubce.com/v2/ai_search/web_search`。可通过 `DOUBAO_API_KEY` / `DOUBAO_BASE_URL`、`ZHIHU_API_KEY` / `ZHIHU_BASE_URL`、`BAIDU_API_KEY` / `BAIDU_BASE_URL` 配置，也可用上面的 `modsearch config set <引擎>.apiKey` / `.baseURL` 命令。各端点的请求头、请求字段、额度和限制见配置手册。
+搜索顺序为 `firecrawl` → `keenable` → `antigravity-cli` → `tavily` → `exa` → `doubao` → `zhihu` → `baidu`。Doubao、Zhihu 和百度千帆只负责搜索且必须配置 key，没有免 key 档。Doubao 使用 Custom 版端点 `POST https://open.feedcoopapi.com/search_api/web_search`，采用 Bearer 鉴权，请求体为 `{ "Query": <query>, "SearchType": "web", "Count": N, "Filter": { "NeedUrl": true } }`。`Count` 默认 10、最大 50；`NeedUrl` 只保留带落地页 URL 的结果，并丢弃没有 URL 的火山如意卡片。引擎把 `Title` 映射为 title、`Url` 映射为 url、优先把 `Summary`（缺失时才用 `Snippet`）映射为 snippet、`SiteName` 映射为 source、`PublishTime` 映射为 published_at；厂商建议模型使用与查询相关的 500–1000 字 `Summary`，而列表页 `Snippet` 约 200 字。错误 `10409` 特指订阅套餐 key 被用于不接受它的版本；本引擎的 Custom 端点支持按量后付费与订阅套餐，两种计费方式各有自己的 key。每个火山引擎账号每月 500 次免费调用由豆包搜索各项服务共用，并且不论计费类型都会优先消耗；默认每账号 10 QPS，可提交工单申请提高。`DOUBAO_API_KEY` / `DOUBAO_BASE_URL` 环境变量保持不变。默认端点还包括`GET https://developer.zhihu.com/api/v1/content/global_search`，以及百度千帆的 `POST https://qianfan.baidubce.com/v2/ai_search/web_search`。可通过 `DOUBAO_API_KEY` / `DOUBAO_BASE_URL`、`ZHIHU_API_KEY` / `ZHIHU_BASE_URL`、`BAIDU_API_KEY` / `BAIDU_BASE_URL` 配置，也可用上面的 `modsearch config set <引擎>.apiKey` / `.baseURL` 命令。各端点的请求头、请求字段、额度和限制见配置手册。
 
 不做任何设置就能开跑：搜索和单页抓取默认运行在 Firecrawl 的免注册免费额度上（每月 1,000 免费 credits，无需注册），搜索还能退到 Keenable 的免注册额度（每个 IP 每小时 1,000 次，无需注册）。免注册公网抓取默认开启，它会把请求的 URL 交给 Firecrawl 的云端爬虫，结果中的 warning 会标明这条路径。`firecrawl.keylessFetch false` 可让自动抓取只走本地。私有或保留地址不会发给 Firecrawl，而会落到本地抓取器。
 
@@ -107,7 +107,7 @@ dsh 网页端没有终端，所以插件自带一张设置卡片。dsh 0.1.6-alp
 
 每个引擎默认都勾选。取消勾选只写入 `enabled: false`，重新勾选会删除这项覆盖，不保存多余的 `true`。取消当前首选引擎时，首选项会回到自动。卡片只改自己列出来的引擎：没有复选框的引擎（本机跑不了的，以及 `local`）的 `enabled` 一律原样带过，改它们只能用 `modsearch config set <engine>.enabled`。本机一个就绪引擎都没有时，这排复选框换成一行提示，说明本机暂无就绪的引擎。
 
-Tavily、Exa、Firecrawl、Keenable、Doubao、Zhihu、百度千帆的官方端点内置在 provider 代码里。三个新搜索引擎的默认端点分别是 Doubao：`POST https://open.feedcoopapi.com/search_api/global_search`；Zhihu：`GET https://developer.zhihu.com/api/v1/content/global_search`；百度千帆：`POST https://qianfan.baidubce.com/v2/ai_search/web_search`。界面的接口地址只表示覆盖值。留空或清空都会使用内置官方端点，不会把默认 URL 写进配置文件。
+Tavily、Exa、Firecrawl、Keenable、Doubao、Zhihu、百度千帆的官方端点内置在 provider 代码里。三个新搜索引擎的默认端点分别是 Doubao Custom 版：`POST https://open.feedcoopapi.com/search_api/web_search`；Zhihu：`GET https://developer.zhihu.com/api/v1/content/global_search`；百度千帆：`POST https://qianfan.baidubce.com/v2/ai_search/web_search`。界面的接口地址只表示覆盖值。留空或清空都会使用内置官方端点，不会把默认 URL 写进配置文件。
 
 其余设置仍然只走 CLI，包括 `bin`、`allowPrivateNetwork`、`cooldown` 和 `keylessFetch`。卡片保存时会原样带过这些字段，也无法新建它们。
 

@@ -113,12 +113,16 @@ Tavily returns 432 (plan usage cap) and 433 (PAYGO cap) when the monthly budget 
 
 ## Doubao Search (Volcengine)
 
-Doubao is search-only and always requires a key; it has no keyless tier.
+Doubao remains search-only and requires a key; it has no keyless tier. The engine now uses the Custom edition, which supports both pay-as-you-go and subscription plans, with a separate API key for each billing mode. The environment variables remain `DOUBAO_API_KEY` and `DOUBAO_BASE_URL`.
 
 - **Missing key:** Run `modsearch doctor`, then set `modsearch config set doubao.apiKey <key>` or `DOUBAO_API_KEY`. A non-empty environment value overrides the config file.
 - **401/403:** Replace an invalid or revoked key and confirm the Volcengine account has access to Doubao Search. Check `DOUBAO_API_KEY` for an overriding value.
-- **Quota or rate limit:** Keep the account under 10 QPS. Each Volcengine account gets 500 free calls/month shared with the Custom edition; Global is pay-as-you-go only, with no subscription plans. Keep `DocCount` at 20 or below, check account usage/billing, or allow automatic failover to another engine.
-- **Wrong endpoint:** Restore the default by running `modsearch config set doubao.baseURL ""` and unsetting `DOUBAO_BASE_URL`. The default is `POST https://open.feedcoopapi.com/search_api/global_search` with Bearer auth.
+- **Quota or rate limit:** Each Volcengine account gets 500 free calls/month from a shared Doubao Search pool, consumed first regardless of billing mode. The default limit is 10 QPS/account and can be raised by ticket. Check account usage/billing or allow automatic failover to another engine.
+- **Default request and count:** The endpoint is `POST https://open.feedcoopapi.com/search_api/web_search` with Bearer auth and body `{ "Query": <query>, "SearchType": "web", "Count": N, "Filter": { "NeedUrl": true } }`. `Count` defaults to 10 and maxes at 50. `Filter.NeedUrl: true` keeps only results with landing-page URLs and drops 火山如意 cards without one.
+- **Result mapping:** `Result.WebResults[]` items map `Title`→title, `Url`→url, `Summary` when present else `Snippet`→snippet, `SiteName`→source, and `PublishTime`→published_at. The vendor recommends the 500–1,000-character query-relevant `Summary` for model use; `Snippet` is the ~200-character list-view teaser.
+- **10409:** This specifically means a subscription-plan key was used against an edition that does not accept it. The Custom edition endpoint used by the engine supports both billing modes; check that `DOUBAO_BASE_URL` is not overriding it with an incompatible edition.
+- **Other API errors:** `10400` general parameter error; `10402` illegal search type; `10403` permission error; `10406` free search allowance exhausted; `10408` service not paid for; `10410` no available subscription plan; `10412` subscription-plan quota exhausted; `10500` internal error (retryable); `700429` concurrent QPS ceiling.
+- **Wrong endpoint:** Restore the default by running `modsearch config set doubao.baseURL ""` and unsetting `DOUBAO_BASE_URL`. The default is `POST https://open.feedcoopapi.com/search_api/web_search` with Bearer auth.
 
 ## Zhihu global search
 
