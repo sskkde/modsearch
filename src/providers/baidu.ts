@@ -1,6 +1,6 @@
 // Baidu Qianfan AI Search web_search API: POST https://qianfan.baidubce.com/v2/ai_search/web_search
 // https://cloud.baidu.com/doc/qianfan-api/s/Wmbq4z7e5
-import { ApiKeyFailureError, isQuotaFailureMessage, splitApiKeys } from '../util/apiKeys.ts';
+import { ApiKeyFailureError, quotaClassOf, splitApiKeys } from '../util/apiKeys.ts';
 import { redactSecrets } from '../util/redact.ts';
 import { requestText } from '../util/timedRequest.ts';
 import type { EngineRequest, EngineOutput, SearchEngine } from './index.ts';
@@ -76,8 +76,9 @@ export async function executeBaiduSearch(options: EngineRequest): Promise<Engine
 
   if (!response.ok) {
     const detail = redactSecrets(text.trim(), secrets);
+    const cls = quotaClassOf(detail);
     const statusMessage = redactSecrets(
-      `baidu returned ${response.status} ${response.statusText}.${detail ? ` ${detail}` : ''}`,
+      `baidu returned ${response.status} ${response.statusText}${classLabel(cls)}.${detail ? ` ${detail}` : ''}`,
       secrets,
     );
 
@@ -92,6 +93,9 @@ export async function executeBaiduSearch(options: EngineRequest): Promise<Engine
     const bodyError = parseErrorBody(text);
     if (bodyError?.code) {
       throw codeFailure(bodyError.code, bodyError.message, secrets);
+    }
+    if (cls !== null) {
+      throw new ApiKeyFailureError(statusMessage);
     }
     throw new Error(statusMessage);
   }
@@ -150,13 +154,25 @@ function parseErrorBody(text: string): { code?: unknown; message?: unknown } | u
   }
 }
 
+/**
+ * Spell the class in the neutral English the shared cooldown classifier reads.
+ * Qianfan answers in its own wording, often Chinese, and a spent free tier the
+ * classifier cannot read would leave the engine cooling for nothing.
+ */
+function classLabel(cls: 'quota' | 'rate' | null): string {
+  if (cls === 'quota') return ' (quota)';
+  if (cls === 'rate') return ' (rate limit)';
+  return '';
+}
+
 function codeFailure(code: unknown, message: unknown, secrets: ReadonlyArray<string | undefined>): Error {
   const messageText = typeof message === 'string' ? message : message == null ? '' : String(message);
-  const description = `baidu returned error code ${String(code)}${messageText ? `: ${messageText}` : ''}.`;
+  const cls = quotaClassOf(messageText);
+  const description = `baidu returned error code ${String(code)}${classLabel(cls)}${messageText ? `: ${messageText}` : ''}.`;
   const safeDescription = redactSecrets(description, secrets);
   if (
-    isQuotaFailureMessage(messageText) ||
-    /quota|limit|rate|auth|permission|token|forbidden/i.test(messageText)
+    cls !== null ||
+    /quota|limit|rate|auth|permission|token|forbidden|密钥|未授权|无权限/i.test(messageText)
   ) {
     return new ApiKeyFailureError(safeDescription);
   }

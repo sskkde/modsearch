@@ -1,6 +1,6 @@
 // Zhihu Data Open Platform global search API, search mode only.
 // https://developer.zhihu.com/docs?key=global_search
-import { ApiKeyFailureError, isQuotaFailureMessage, splitApiKeys } from '../util/apiKeys.ts';
+import { ApiKeyFailureError, quotaClassOf, splitApiKeys } from '../util/apiKeys.ts';
 import { redactSecrets } from '../util/redact.ts';
 import { requestText } from '../util/timedRequest.ts';
 import type { EngineRequest, EngineOutput, SearchEngine } from './index.ts';
@@ -77,8 +77,9 @@ export async function executeZhihuSearch(options: EngineRequest): Promise<Engine
 
   if (!response.ok) {
     const detail = redactSecrets(text.trim(), secrets);
+    const cls = quotaClassOf(detail);
     const message = redactSecrets(
-      `zhihu returned ${response.status} ${response.statusText}.${detail ? ` ${detail}` : ''}`,
+      `zhihu returned ${response.status} ${response.statusText}${classLabel(cls)}.${detail ? ` ${detail}` : ''}`,
       secrets,
     );
     // A server-side failure is transient, even if an error page mentions a key.
@@ -89,6 +90,7 @@ export async function executeZhihuSearch(options: EngineRequest): Promise<Engine
       response.status === 401 ||
       response.status === 403 ||
       response.status === 429 ||
+      cls !== null ||
       isKeyRelatedMessage(detail)
     ) {
       throw new ApiKeyFailureError(message);
@@ -106,8 +108,12 @@ export async function executeZhihuSearch(options: EngineRequest): Promise<Engine
 
   if (typeof data.Code === 'number' && data.Code !== 0) {
     const detail = data.Message ?? 'Unknown error';
-    const message = redactSecrets(`zhihu returned Code ${data.Code}: ${detail}`, secrets);
-    if (isKeyRelatedMessage(detail)) {
+    const cls = quotaClassOf(detail);
+    const message = redactSecrets(
+      `zhihu returned Code ${data.Code}${classLabel(cls)}: ${detail}`,
+      secrets,
+    );
+    if (cls !== null || isKeyRelatedMessage(detail)) {
       throw new ApiKeyFailureError(message);
     }
     throw new Error(message);
@@ -160,10 +166,21 @@ function toIsoTimestamp(value: number | undefined): string | undefined {
   }
 }
 
+/**
+ * Spell the class in the neutral English the shared cooldown classifier reads.
+ * The platform answers in its own wording, often Chinese, and a spent quota the
+ * classifier cannot read would leave the engine cooling for nothing.
+ */
+function classLabel(cls: 'quota' | 'rate' | null): string {
+  if (cls === 'quota') return ' (quota)';
+  if (cls === 'rate') return ' (rate limit)';
+  return '';
+}
+
 function isKeyRelatedMessage(message: string): boolean {
   return (
-    isQuotaFailureMessage(message) ||
-    /\b(?:rate|limit|auth(?:entication|orization)?|permission|token|forbidden|unauthori[sz]ed)\b/i.test(
+    quotaClassOf(message) !== null ||
+    /\b(?:rate|limit|auth(?:entication|orization)?|permission|token|forbidden|unauthori[sz]ed)\b|密钥|未授权|无权限/i.test(
       message,
     )
   );

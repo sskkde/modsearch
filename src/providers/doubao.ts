@@ -1,6 +1,6 @@
 // Volcengine Doubao Search Global edition: POST /search_api/global_search.
 // See https://docs.volcengine.com/docs/Networkedsearch/doubao-search-global-edition
-import { ApiKeyFailureError, isQuotaFailureMessage, splitApiKeys } from '../util/apiKeys.ts';
+import { ApiKeyFailureError, quotaClassOf, splitApiKeys } from '../util/apiKeys.ts';
 import { redactSecrets } from '../util/redact.ts';
 import { requestText } from '../util/timedRequest.ts';
 import type { EngineRequest, EngineOutput, SearchEngine } from './index.ts';
@@ -11,6 +11,18 @@ const MAX_RESULTS = 20;
 const DOUBAO_DEFAULT_BASE = 'https://open.feedcoopapi.com';
 const DOUBAO_PATH = '/search_api/global_search';
 const KEY_FAILURE_CODES = new Set(['10403', '10408', '10410', '10412', '700429', '700901']);
+
+/**
+ * The codes whose meaning the shared classifiers need spelled out, in the
+ * neutral terms they read. The vendor also answers with its own wording, which
+ * for this API is often Chinese, and a message the cooldown classifier cannot
+ * read would leave a spent quota unremembered: every run would pay a round trip
+ * to rediscover the wall. `quota` parks the engine; `rate` stays transient.
+ */
+const CODE_CLASS: Record<string, 'quota' | 'rate'> = {
+  '10412': 'quota', // search plan quota exhausted
+  '700429': 'rate', // request frequency over the limit
+};
 
 interface DoubaoSnippet {
   Type?: string;
@@ -92,8 +104,10 @@ export async function executeDoubaoSearch(options: EngineRequest): Promise<Engin
 
   if (!response.ok) {
     const detail = redactSecrets(text.trim(), secrets);
+    const cls = quotaClassOf(detail);
+    const label = cls === 'quota' ? ' (quota)' : cls === 'rate' ? ' (rate limit)' : '';
     const message = redactSecrets(
-      `doubao returned ${response.status} ${response.statusText}.${detail ? ` ${detail}` : ''}`,
+      `doubao returned ${response.status} ${response.statusText}${label}.${detail ? ` ${detail}` : ''}`,
       secrets,
     );
     // A server error is transient even if its body happens to mention a key or quota.
@@ -109,7 +123,7 @@ export async function executeDoubaoSearch(options: EngineRequest): Promise<Engin
     if (apiError) {
       throw createApiError(apiError, secrets);
     }
-    if (isQuotaFailureMessage(detail)) {
+    if (cls !== null) {
       throw new ApiKeyFailureError(message);
     }
     throw new Error(message);
@@ -209,8 +223,10 @@ function getApiError(payload: unknown): DoubaoApiError | null {
 
 function createApiError(apiError: DoubaoApiError, secrets: ReadonlyArray<string | undefined | null>): Error {
   const detail = redactSecrets(apiError.message, secrets);
+  const cls = CODE_CLASS[apiError.code] ?? quotaClassOf(detail);
+  const label = cls === 'quota' ? ' (quota)' : cls === 'rate' ? ' (rate limit)' : '';
   const message = redactSecrets(
-    `doubao returned API error${apiError.code ? ` ${apiError.code}` : ''}.${detail ? ` ${detail}` : ''}`,
+    `doubao returned API error${apiError.code ? ` ${apiError.code}` : ''}${label}.${detail ? ` ${detail}` : ''}`,
     secrets,
   );
   if (KEY_FAILURE_CODES.has(apiError.code) || isKeyRelatedMessage(detail)) {
@@ -223,12 +239,13 @@ function createApiError(apiError: DoubaoApiError, secrets: ReadonlyArray<string 
  * The live endpoint does not always answer with a numeric code: a bad key comes
  * back as `{"Error":{"Code":"invalid_api_key","Message":"invalid api key"}}`.
  * A named code the table cannot know still has to rotate the sibling keys, so
- * the message decides when the code does not.
+ * the message decides when the code does not. `quotaClassOf` covers the vendor's
+ * own Chinese wording for a spent quota or a rate limit.
  */
 function isKeyRelatedMessage(message: string): boolean {
   return (
-    isQuotaFailureMessage(message) ||
-    /invalid[ _-]?api[ _-]?key|api[ _-]?key|unauthori[sz]ed|forbidden|permission|auth(?:entication|orization)?|rate[ _-]?limit|quota|token/i.test(
+    quotaClassOf(message) !== null ||
+    /invalid[ _-]?api[ _-]?key|api[ _-]?key|unauthori[sz]ed|forbidden|permission|auth(?:entication|orization)?|token|密钥|未授权|无权限/i.test(
       message,
     )
   );

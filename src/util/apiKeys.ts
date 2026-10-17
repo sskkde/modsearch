@@ -33,3 +33,24 @@ const QUOTA_FAILURE_PATTERNS = [
 export function isQuotaFailureMessage(message: string): boolean {
   return QUOTA_FAILURE_PATTERNS.some((pattern) => pattern.test(message));
 }
+
+/**
+ * The class a vendor's failure text describes, spelled in the neutral English
+ * terms the shared cooldown classifier reads: `quota` parks the engine until it
+ * may recover, `rate` is a per-second blip that never touches the store, and
+ * null is neither.
+ *
+ * The Chinese-market engines answer in their own language. A spent quota the
+ * classifier cannot read would never be remembered, so every run would pay a
+ * round trip to rediscover the wall; an engine normalises its vendor wording
+ * through this before surfacing it.
+ */
+export function quotaClassOf(message: string): 'quota' | 'rate' | null {
+  if (isQuotaFailureMessage(message) || /额度|配额|余额|已用完|已用尽|超出套餐/.test(message)) {
+    return 'quota';
+  }
+  if (/rate.?limit|too many requests|\b429\b|频率|过于频繁|请求过快|限流/i.test(message)) {
+    return 'rate';
+  }
+  return null;
+}

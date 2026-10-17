@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { classifyQuota } from '../cooldown.ts';
 import { ApiKeyFailureError } from '../util/apiKeys.ts';
 import type { EngineRequest } from './index.ts';
 import { executeZhihuSearch, zhihuProvider } from './zhihu.ts';
@@ -164,6 +165,25 @@ describe('zhihu provider', () => {
       mockFetchJson({ Code: 1001, Message: message });
       await expect(executeZhihuSearch(request())).rejects.toBeInstanceOf(ApiKeyFailureError);
     }
+  });
+
+  it('labels a Chinese quota Code so the cooldown classifier can read it', async () => {
+    // The platform answers in its own language. The shared classifier reads
+    // neutral English only, so the message this engine builds has to carry the
+    // term itself, or a spent quota is never remembered.
+    mockFetchJson({ Code: 20002, Message: '配额已用尽' });
+    const error = await executeZhihuSearch(request()).catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(ApiKeyFailureError);
+    expect((error as Error).message).toContain('(quota)');
+    expect(classifyQuota(error, new Date('2026-10-17T00:00:00Z'))).not.toBe(null);
+  });
+
+  it('labels a Chinese rate limit as transient, so it is never cooled down', async () => {
+    mockFetchJson({ Code: 20003, Message: '请求频率超过限制' });
+    const error = await executeZhihuSearch(request()).catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(ApiKeyFailureError);
+    expect((error as Error).message).toContain('(rate limit)');
+    expect(classifyQuota(error, new Date('2026-10-17T00:00:00Z'))).toBe(null);
   });
 
   it('keeps HTTP 500 and unrelated non-zero Code failures as plain errors', async () => {

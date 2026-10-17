@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { classifyQuota } from '../cooldown.ts';
 import { ApiKeyFailureError } from '../util/apiKeys.ts';
 import { doubaoProvider, executeDoubaoSearch } from './doubao.ts';
 
@@ -187,6 +188,32 @@ describe('doubao provider', () => {
       Result: null,
     });
     await expect(executeDoubaoSearch(searchRequest())).rejects.toBeInstanceOf(ApiKeyFailureError);
+  });
+
+  it('labels a spent plan quota so the cooldown classifier can read it', async () => {
+    // Code 10412 is the plan quota wall, and the vendor's own wording is often
+    // Chinese. The shared classifier reads neutral English only, so the message
+    // this engine builds has to carry the term itself: otherwise the engine is
+    // retried on every run and pays a round trip to rediscover the wall.
+    mockFetchJson({
+      ResponseMetadata: { Error: { Code: '10412', Message: '搜索套餐额度不足' } },
+      Result: null,
+    });
+    const error = await executeDoubaoSearch(searchRequest()).catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(ApiKeyFailureError);
+    expect((error as Error).message).toContain('(quota)');
+    expect(classifyQuota(error, new Date('2026-10-17T00:00:00Z'))).not.toBe(null);
+  });
+
+  it('labels a rate limit as transient, so it is never cooled down', async () => {
+    mockFetchJson({
+      ResponseMetadata: { Error: { Code: '700429', Message: '请求频率超过限制' } },
+      Result: null,
+    });
+    const error = await executeDoubaoSearch(searchRequest()).catch((cause: unknown) => cause);
+    expect(error).toBeInstanceOf(ApiKeyFailureError);
+    expect((error as Error).message).toContain('(rate limit)');
+    expect(classifyQuota(error, new Date('2026-10-17T00:00:00Z'))).toBe(null);
   });
 
   it('keeps HTTP 500 and API error 10500 as plain errors', async () => {
