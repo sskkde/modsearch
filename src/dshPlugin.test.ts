@@ -553,6 +553,33 @@ describe('dsh settings card route', () => {
     );
   });
 
+  it('offers the Chinese-market engines as a preference and a keyed target', async () => {
+    // doubao, zhihu and baidu sit in CARD_ENGINES and KEYED_ENGINES. The card
+    // rejects a pin or a key for a name it does not list, so this is what makes
+    // them configurable from the browser at all: without it a dsh web user with
+    // no terminal could not reach the three engines the CLI can already route to.
+    await withConfig({ engine: '', engines: {} }, async (handler, file) => {
+      for (const engine of ['doubao', 'zhihu', 'baidu']) {
+        const { status } = await callRoute(
+          handler,
+          postOf({
+            engine,
+            target: engine,
+            apiKey: `${engine}-secret`,
+            baseURL: `https://${engine}.example`,
+          }),
+        );
+        expect(status).toBe(200);
+        const saved = JSON.parse(fs.readFileSync(file, 'utf-8'));
+        expect(saved.engine).toBe(engine);
+        expect(saved.engines[engine]).toEqual({
+          apiKey: `${engine}-secret`,
+          baseURL: `https://${engine}.example`,
+        });
+      }
+    });
+  });
+
   it('does not report comma-only API key settings as stored keys', async () => {
     await withConfig(
       { engine: 'tavily', engines: { tavily: { apiKey: ', ,' } } },
